@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<property-set-registry>
+ <predicate id="dublincore" title="Dublin Core Metadata"
+            expression="" permission="View">
+ </predicate>
+ <predicate id="dcworkflow"
+            title="DCWorkflow Catalogable Variables"
+            expression="" permission="View">
+ </predicate>
+ <predicate id="vocabulary" title="Pluggable Vocabularies"
+            expression="" permission="View">
+ </predicate>
+ <predicate id="cmf"
+            title="CMF Properties (discussion, etc)"
+            expression="" permission="View">
+ </predicate>
+ <predicate id="fsattrs" title="Filesystem Attributes"
+            expression="" permission="View">
+ </predicate>
+ <predicate id="sharing" title="Sharing Information"
+            expression="" permission="View">
+ </predicate>
+ <predicate id="permissions" title="Permissions"
+            expression="" permission="View">
+ </predicate>
+ <predicate id="addables" title="Addable Types"
+            expression="" permission="View">
+ </predicate>
+</property-set-registry>

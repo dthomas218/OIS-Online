@@ -1,0 +1,156 @@
+Normalization Tests
+===================
+
+The most critical and most error-prone piece of our normalization
+scheme is generating a sequential filename upon filename
+clashes. Thus, we are going to test below some of the most complex
+cases that have surfaced in testing.
+
+First, a little bit of setup:
+
+  >>> from Products.ShellExServer.normalize import seq
+  >>> from Products.ShellExServer.normalize import FilenameNormalizer
+
+  >>> normal = FilenameNormalizer(enc='utf-8', relaxed=False)
+  >>> relaxed = FilenameNormalizer(enc='utf-8', relaxed=True)
+
+  >>> class Parent:
+  ...   def __init__(self, ids=()):
+  ...      self.ids = ids
+  ...   def objectIds(self):
+  ...      return self.ids
+
+Filename ends with numbers, preceeded by a non-letter
+-----------------------------------------------------
+  
+A filename that has numbers in it, the numbers should not be
+removed:
+
+  >>> original = 'QS.3726.dmg'
+  >>> name = normal(original)
+  >>> parent = Parent()  
+  >>> seq(name, original, parent, normal)
+  ('qs-3726.dmg', 'QS.3726.dmg')
+
+The same with relaxed normalization:
+
+  >>> original = 'QS.3726.dmg'
+  >>> name = relaxed(original)
+  >>> parent = Parent()  
+  >>> seq(name, original, parent, normal)
+  ('QS.3726.dmg', 'QS.3726.dmg')
+
+If the filename already exists, generate a new one:
+
+  >>> original = 'QS.3726.dmg'
+  >>> name = normal(original)
+  >>> parent = Parent(ids=(name,))  
+  >>> seq(name, original, parent, normal)
+  ('qs-3726-1.dmg', 'QS.3726 1.dmg')
+
+If the filename already exists, generate a new one (relaxed):
+
+  >>> original = 'QS.3726.dmg'
+  >>> name = relaxed(original)
+  >>> parent = Parent(ids=(name,))  
+  >>> seq(name, original, parent, relaxed)
+  ('QS.3726 1.dmg', 'QS.3726 1.dmg')
+
+If the filename without the number already exists, generate a new one:
+
+  >>> original = 'QS.dmg'
+  >>> name = normal(original)
+  >>> parent = Parent(ids=(name,))  
+  >>> seq(name, original, parent, normal)
+  ('qs-1.dmg', 'QS 1.dmg')
+
+If the filename without the number already exists, generate a new one
+(relaxed):
+
+  >>> original = 'QS.dmg'
+  >>> name = relaxed(original)
+  >>> parent = Parent(ids=(name,))  
+  >>> seq(name, original, parent, relaxed)
+  ('QS 1.dmg', 'QS 1.dmg')
+
+If the filename without the number already exists, and also a
+newly-renamed one, generate yet another new one:
+
+  >>> original1 = 'qs.dmg'
+  >>> original2 = 'qs-1.dmg'
+  >>> name1 = normal(original1)
+  >>> name2 = normal(original2)
+  >>> parent = Parent(ids=(name1, name2))  
+  >>> seq(name2, original2, parent, normal)
+  ('qs-1-1.dmg', 'qs-1-1.dmg')
+
+  >>> original1 = 'qs.dmg'
+  >>> original2 = 'qs-1.dmg'
+  >>> original3 = 'qs-1-1.dmg'
+  >>> name1 = normal(original1)
+  >>> name2 = normal(original2)
+  >>> name3 = normal(original3)
+  >>> parent = Parent(ids=(name1, name2, name3))  
+  >>> seq(name2, original2, parent, normal)
+  ('qs-1-2.dmg', 'qs-1-2.dmg')
+
+Filename ends with numbers, preceeded by letters
+------------------------------------------------
+
+A filename that has numbers in it, the numbers should not be
+removed:
+
+  >>> original = 'Newsletter 2007 Q4.txt'
+  >>> name = normal(original)
+  >>> parent = Parent()  
+  >>> seq(name, original, parent, normal)
+  ('newsletter-2007-q4.txt', 'Newsletter 2007 Q4.txt')
+
+The same with relaxed normalization:
+
+  >>> original = 'Newsletter 2007 Q4.txt'
+  >>> name = relaxed(original)
+  >>> parent = Parent()  
+  >>> seq(name, original, parent, normal)
+  ('Newsletter 2007 Q4.txt', 'Newsletter 2007 Q4.txt')
+
+If the filename already exists, generate a new one:
+
+  >>> original = 'Newsletter 2007 Q4.txt'
+  >>> name = normal(original)
+  >>> parent = Parent(ids=(name,))  
+  >>> seq(name, original, parent, normal)
+  ('newsletter-2007-q4-1.txt', 'Newsletter 2007 Q4 1.txt')
+
+If the filename already exists, generate a new one (relaxed):
+
+  >>> original = 'Newsletter 2007 Q4.txt'
+  >>> name = relaxed(original)
+  >>> parent = Parent(ids=(name,))  
+  >>> seq(name, original, parent, relaxed)
+  ('Newsletter 2007 Q4 1.txt', 'Newsletter 2007 Q4 1.txt')
+
+
+Filename ends with number, some similar numbered already exist
+--------------------------------------------------------------
+
+A filename that has numbers in it, the numbers should not be
+removed:
+
+  >>> original = 'file.txt'
+  >>> name = normal(original)
+  >>> parent = Parent(ids=('file.txt', 'file1.txt', 'file2.txt'))
+  >>> seq(name, original, parent, normal)
+  ('file-1.txt', 'file 1.txt')
+
+Filename with special characters on it
+--------------------------------------
+
+  >>> original = "Beethoven's Symphony No. 9 (Scherzo).wma"
+  >>> name = normal(original)
+  >>> print name
+  bee...-symphony-no-9-scherzo.wma
+
+  >>> name = relaxed(original)
+  >>> print name
+  Bee... Symphony No. 9 ...Scherzo...wma

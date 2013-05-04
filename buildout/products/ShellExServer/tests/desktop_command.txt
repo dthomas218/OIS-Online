@@ -1,0 +1,147 @@
+Desktop Command Tests
+=====================
+
+Hitting the 'View in Enfold Desktop' icon generates a '.plonecmd' file
+that is opened with a specialized app in Enfold Desktop. That file has
+some information about session roots and which file to open, if any::
+
+  >>> from Testing.ZopeTestCase import user_name, user_password, folder_name
+  >>> from urllib import quote
+  >>> self.setRoles(['Manager'])
+
+Suppose you clicked on a File:
+
+  >>> _ = self.portal.invokeFactory('File', 'some-file')
+
+  >>> self.portal['some-file'].getPortalTypeName()
+  'File'
+
+  >>> print http(r"""
+  ... GET plone/some-file/plone_desktop_config.plonecmd HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  ...
+  Content-Type: text/x-plone-command...
+  [addsession]
+  url = http://localhost/plone
+  username = ...
+  title = ...
+  <BLANKLINE>
+  [invoke]
+  name = http://localhost/plone/some-file
+  <BLANKLINE>
+
+Suppose you click on a Folder instead:
+
+  >>> _ = self.portal.invokeFactory('Folder', 'some-folder')
+
+  >>> self.portal['some-folder'].getPortalTypeName()
+  'Folder'
+
+  >>> print http(r"""
+  ... GET plone/some-folder/plone_desktop_config.plonecmd HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  ...
+  Content-Type: text/x-plone-command...
+  [addsession]
+  url = http://localhost/plone
+  username = ...
+  title = ...
+  <BLANKLINE>
+  [shellexecute]
+  verb = Explore
+  class = Folder
+  name = http://localhost/plone/some-folder
+  <BLANKLINE>
+
+
+Virtual Hosting and the Desktop Command (#340)
+----------------------------------------------
+
+The generated file should take Virtual Hosting into account:
+
+  >>> adding = self.portal.manage_addProduct['SiteAccess']
+  >>> adding.manage_addVirtualHostMonster('vhm')
+
+  >>> _ = self.portal.invokeFactory('Folder', 'outside')
+  >>> _ = self.portal.invokeFactory('File', 'file2')
+  >>> _ = self.portal.outside.invokeFactory('Folder', 'another')
+  >>> _ = self.portal.outside.another.invokeFactory('File', 'another-file')
+
+  >>> print http(r"""
+  ... GET plone/VirtualHostBase/http/example.org:80/outside/VirtualHostRoot/_vh_press/plone_desktop_config.plonecmd HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  ...
+  Content-Type: text/x-plone-command...
+  [addsession]
+  url = http://example.org/press
+  username = ...
+  title = outside
+  <BLANKLINE>
+  [shellexecute]
+  verb = Explore
+  class = Folder
+  name = http://example.org/press
+  <BLANKLINE>
+
+  >>> print http(r"""
+  ... GET plone/VirtualHostBase/http/example.org:80/outside/VirtualHostRoot/_vh_press/file2/plone_desktop_config.plonecmd HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  ...
+  Content-Type: text/x-plone-command...
+  [addsession]
+  url = http://example.org/press
+  username = ...
+  title = outside
+  <BLANKLINE>
+  [invoke]
+  name = http://example.org/press/file2
+  <BLANKLINE>
+
+  >>> print http(r"""
+  ... GET plone/VirtualHostBase/http/example.org:80/outside/VirtualHostRoot/_vh_press/another/plone_desktop_config.plonecmd HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  ...
+  Content-Type: text/x-plone-command...
+  [addsession]
+  url = http://example.org/press
+  username = ...
+  title = outside
+  <BLANKLINE>
+  [shellexecute]
+  verb = Explore
+  class = Folder
+  name = http://example.org/press/another
+  <BLANKLINE>
+
+  >>> print http(r"""
+  ... GET plone/VirtualHostBase/http/example.org:80/outside/VirtualHostRoot/_vh_press/another/another-file/plone_desktop_config.plonecmd HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  ...
+  Content-Type: text/x-plone-command...
+  [addsession]
+  url = http://example.org/press
+  username = ...
+  title = outside
+  <BLANKLINE>
+  [invoke]
+  name = http://example.org/press/another/another-file
+  <BLANKLINE>
+

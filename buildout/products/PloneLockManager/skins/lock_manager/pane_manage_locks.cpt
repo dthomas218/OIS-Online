@@ -1,0 +1,337 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xml:lang="en"
+      lang="en"
+      xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+      metal:use-macro="here/prefs_main_template/macros/master"
+      i18n:domain="plone_lock_manager">
+
+  <metal:block fill-slot="top_slot"
+               tal:define="dummy python:request.set('disable_border', 1)"
+               />
+
+  <body>
+    <metal:fill metal:fill-slot="prefs_configlet_main"
+                tal:define="search_path request/search_path|nothing">
+
+      <metal:main define-macro="main"
+                  tal:define="errors options/state/getErrors;
+                              gt python:modules['Products.CMFCore.utils'].getToolByName;
+                              tool python:gt(context, 'portal_lock_manager');
+                              default_lock_timeout python:tool.getProperty('default_lock_timeout', 0);
+                              maximum_lock_timeout python:tool.getProperty('maximum_lock_timeout', 0)">
+
+        <h1>Lock Manager</h1>
+
+      <a href=""
+         class="link-parent"
+         tal:attributes="href string: $portal_url/plone_control_panel"
+         i18n:translate="label_up_to_plone_setup">
+        Up to Site Setup
+      </a>
+
+        <form name="find_locks"
+              action="find_locks"
+              method="GET"
+              tal:attributes="action string:${here_url}/${template/getId}">
+
+          <input type="hidden" name="form.submitted" value="1" />
+
+          <fieldset>
+
+            <legend i18n:translate="legend_find_locks">Find Locks</legend>
+
+            <div class="field"
+                 tal:define="error errors/search_path | nothing;">
+
+              <label for="search_path"
+                     i18n:translate="label_search_path">Search Path</label>
+
+              <div class="formHelp" i18n:translate="help_search_path">
+                Finding all locked objects can be a very expensive
+                task, especially if you have a large number of documents on your
+                site. Type in a relative path from your site root to search a
+                part of your site, or leave it blank to search the whole site.
+              </div>
+
+              <div tal:content="error">Validation error output</div>
+
+
+              <input type="text"
+                     id="search_path"
+                     name="search_path"
+                     size="25"
+                     tabindex=""
+                     tal:attributes="tabindex tabindex/next;
+                                     value search_path|nothing"
+                     />
+            </div>
+
+            <div class="formControls">
+              <input class="context"
+                     tabindex=""
+                     type="submit"
+                     name="form.button.Find"
+                     value="Find"
+                     i18n:attributes="value"
+                     tal:attributes="tabindex tabindex/next;"
+                     />
+              <input class="standalone"
+                     tabindex=""
+                     type="submit"
+                     name="form.button.Cancel"
+                     value="Cancel"
+                     i18n:attributes="value"
+                     tal:attributes="tabindex tabindex/next;"
+                     />
+            </div>
+
+          </fieldset>
+        </form>
+
+        <metal:block tal:condition="python:search_path is not nothing">
+          <metal:results
+              tal:define="results python:context.findLockedObjects(path=search_path);
+                          Batch python:modules['Products.CMFPlone'].Batch;
+                          DateTime python:modules['DateTime'].DateTime;
+                          b_size python:30;
+                          b_start python:0;
+                          b_start request/b_start | b_start;
+                          desc_length site_properties/search_results_description_length;
+                          desc_ellipsis site_properties/ellipsis">
+
+            <!-- Search results -->
+
+            <form name="clear_locks"
+                  action="clear_locks"
+                  method="GET"
+                  tal:define="errors options/state/getErrors;"
+                  tal:attributes="action string:${here_url}/${template/getId}">
+
+              <input type="hidden"
+                     name="form.submitted"
+                     value="1"
+                     />
+
+              <input type="hidden"
+                     name="search_path"
+                     tal:attributes="value search_path"
+                     />
+
+              <fieldset>
+
+                <legend i18n:translate="legend_locked_objects">
+                  Locked Objects
+                </legend>
+
+                <div tal:condition="not:results">
+                  <p>
+                    <strong i18n:translate="description_no_locks_found">
+                      No locks were found.
+                    </strong>
+                  </p>
+                </div>
+
+                <div tal:condition="results"
+                     tal:define="batch python:Batch(results, b_size, int(b_start), orphan=1);">
+
+                  <strong>
+                    <span i18n:translate="batch_x_locked_items_found">
+                      <span i18n:name="number"
+                            tal:content="python:len(results)">234</span>
+                      locked items found.
+                    </span>
+                  </strong>
+
+
+                <div tal:define="error errors/paths | nothing;"
+                     tal:condition="error"
+                     tal:content="error"
+                     class="portalMessage">
+                  Validation error output
+                </div>
+
+
+                  <dl>
+                    <tal:results repeat="result batch">
+                      <tal:entry define="result_url result/url;
+                                         url string:$result_url/view">
+                        <dt>
+
+                          <input type="checkbox"
+                                 name="paths:list"
+                                 value="#"
+                                 class="noborder"
+                                 tabindex=""
+                                 tal:attributes="value result/path;
+                                                 tabindex tabindex;
+                                                 id result/path"
+                                 />
+
+
+                          <a href="#"
+                             tal:attributes="href url">
+                            <img src="#"
+                                 height="16"
+                                 width="16"
+                                 alt=""
+                                 tal:on-error="structure python:path('context/linkOpaque.gif')"
+                                 tal:replace="structure python:path('context/%s' % result['icon'])"
+                                 />
+                            </a>&nbsp;<a href="#"
+                            tal:attributes="href url"
+                            tal:content="result/title_or_id"
+                            />
+
+                            <span class="discreet"
+                                  i18n:translate="locked_by"
+                                  tal:repeat="info result/info">
+                              from
+                              <span tal:condition="info/modified"
+                                    tal:replace="python:context.toLocalizedTime(info['modified'], long_format=1)"
+                                    i18n:name="modified"
+                                    />
+                              to
+                              <span tal:condition="info/timeout"
+                                    tal:replace="python:context.toLocalizedTime(info['timeout'], long_format=1)"
+                                    i18n:name="timeout"
+                                    />
+                              by
+                              <span tal:condition="info/creator"
+                                    tal:replace="info/creator"
+                                    i18n:name="creator">
+                                Creator
+                              </span>
+                            </span>
+                        </dt>
+
+                        <dd tal:content="python:context.cropText(result['description'], desc_length, desc_ellipsis)">Description</dd>
+
+                      </tal:entry>
+                    </tal:results>
+                  </dl>
+
+                  <!-- Navigation -->
+                  <div metal:use-macro="here/batch_macros/macros/navigation" />
+
+                <div class="formControls">
+                  <input class="context"
+                         tabindex=""
+                         type="submit"
+                         name="form.button.ClearLocks"
+                         value="Clear Lock(s)"
+                         i18n:attributes="value"
+                         tal:attributes="tabindex tabindex/next;"
+                         />
+                  <input class="standalone"
+                         tabindex=""
+                         type="submit"
+                         name="form.button.Cancel"
+                         value="Cancel"
+                         i18n:attributes="value"
+                         tal:attributes="tabindex tabindex/next;"
+                         />
+                </div>
+
+                </div>
+
+              </fieldset>
+            </form>
+
+          </metal:results>
+        </metal:block>
+
+        <form name="timeout_settings"
+              action="lm_timeout_settings"
+              method="POST"
+              tal:attributes="action string:${here_url}/${template/getId}">
+
+          <input type="hidden" name="form.submitted" value="1" />
+
+          <fieldset>
+
+            <legend i18n:translate="legend_timeout_settings">
+              Timeout Settings
+            </legend>
+
+            <div class="field"
+                 tal:define="error errors/default_lock_timeout | nothing;">
+
+              <label for="default_lock_timeout"
+                     i18n:translate="label_default_timeout">
+                Default Timeout
+              </label>
+
+              <div class="formHelp" i18n:translate="help_default_timeout">
+                Default LOCK timeout in seconds. If set to '0' (zero),
+                use Zope's default timeout, of 720 seconds (12 minutes).
+              </div>
+
+              <div tal:content="error">Validation error output</div>
+
+              <input type="text"
+                     id="default_lock_timeout"
+                     name="default_lock_timeout:int:ignore_empty"
+                     size="25"
+                     tabindex=""
+                     tal:attributes="tabindex tabindex/next;
+                                     value default_lock_timeout|nothing"
+                     />
+
+            </div>
+
+            <div class="field"
+                 tal:define="error errors/maximum_lock_timeout | nothing;">
+
+              <label for="maximum_lock_timeout"
+                     i18n:translate="label_maximum_timeout">
+                Maximum Timeout
+              </label>
+
+              <div class="formHelp" i18n:translate="help_maximum_timeout">
+                Maximum LOCK timeout in seconds. If set to '0' (zero),
+                use Zope's maximum timeout, which allows someone to
+                lock a object for an infinitely long amount of
+                time. If set to a non-zero value silently constrains
+                the maximum allowed timeout.
+              </div>
+
+              <div tal:content="error">Validation error output</div>
+
+              <input type="text"
+                     id="maximum_lock_timeout"
+                     name="maximum_lock_timeout:int:ignore_empty"
+                     size="25"
+                     tabindex=""
+                     tal:attributes="tabindex tabindex/next;
+                                     value maximum_lock_timeout|nothing"
+                     />
+
+            </div>
+
+            <div class="formControls">
+              <input class="context"
+                     tabindex=""
+                     type="submit"
+                     name="form.button.Save"
+                     value="Save"
+                     i18n:attributes="value"
+                     tal:attributes="tabindex tabindex/next;"
+                     />
+              <input class="standalone"
+                     tabindex=""
+                     type="submit"
+                     name="form.button.Cancel"
+                     value="Cancel"
+                     i18n:attributes="value"
+                     tal:attributes="tabindex tabindex/next;"
+                     />
+            </div>
+          </fieldset>
+        </form>
+
+      </metal:main>
+    </metal:fill>
+  </body>
+</html>
