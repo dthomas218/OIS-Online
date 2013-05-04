@@ -1,2 +1,0 @@
-[actions]
-action.success = redirect_to:string:prefs_plone_desktop
