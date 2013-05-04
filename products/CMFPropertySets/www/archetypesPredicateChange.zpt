@@ -1,0 +1,109 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:tal="http://xml.zope.org/namespaces/tal"
+      xmlns:metal="http://xml.zope.org/namespaces/metal"
+      xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+      tal:omit-tag="">
+  <head tal:replace="nothing"><title></title></head>
+  <body tal:omit-tag="">
+    <h1 tal:replace="structure context/manage_page_header">Header</h1>
+
+    <h2 tal:define="manage_tabs_message request/manage_tabs_message | options/manage_tabs_message | nothing"
+        tal:replace="structure context/manage_tabs">Tabs</h2>
+
+    <h3 tal:define="form_title string:Change Property Set Parameters"
+        tal:replace="structure context/manage_form_title">
+      Form Title
+    </h3>
+
+    <p class="form-help">
+      In this screen you can fine tune the settings of your property
+      set, as well as selecting what content types it applies to and
+      what fields it will handle..
+    </p>
+
+    <form action="manage_changeParameters"
+          method="post"
+          enctype="multipart/form-data"
+          tal:attributes="action string:${request/URL1}/manage_changeParameters">
+      <table cellspacing="0" cellpadding="2" border="0">
+        <tr>
+          <td align="left" valign="top">
+            <div class="form-label">
+              Identifier
+            </div>
+          </td>
+          <td align="left" valign="top">
+            <input type="text"
+                   name="id:ignore_empty"
+                   size="20"
+                   tal:attributes="value context/getId"
+                   />
+          </td>
+        </tr>
+        <tr>
+          <td align="left" valign="top">
+            <div class="form-label">
+              Namespace
+            </div>
+          </td>
+          <td align="left" valign="top">
+            <input type="text"
+                   name="ns:ignore_empty"
+                   size="45"
+                   tal:attributes="value context/getNamespace"
+                   />
+          </td>
+        </tr>
+        <tr>
+          <td align="left" valign="top">
+            <div class="form-label">
+              Applies to
+            </div>
+          </td>
+          <td align="left" valign="top"
+              tal:define="current_types context/getEnabledPortalTypes">
+            <select multiple="multiple" name="portal_types:list:ignore_empty">
+              <option tal:repeat="type context/getPortalTypes"
+                      tal:attributes="value type;
+                                      selected python:type in current_types and 'selected' or None"
+                      tal:content="type">
+                Type
+              </option>
+            </select>
+          </td>
+        </tr>
+        <tr>
+          <td align="left" valign="top">
+            <div class="form-label">
+              Enable Fields
+            </div>
+            <p class="form-help">
+              List the names of the fields to be enabled, one per line.
+            </p>
+          </td>
+          <td align="left" valign="top"
+              tal:define="current_fields context/getFields">
+            <textarea name="fields:lines:ignore_empty"
+                      tal:content="python:'\n'.join(current_fields)"
+                      cols="40"
+                      rows="6"></textarea>
+          </td>
+        </tr>
+        <tr>
+          <td align="left" valign="top">
+          </td>
+          <td align="left" valign="top">
+            <div class="form-element">
+              <input class="form-element"
+                     type="submit"
+                     name="submit"
+                     value=" Save " />
+            </div>
+          </td>
+        </tr>
+      </table>
+    </form>
+
+    <h1 tal:replace="structure context/manage_page_footer">Footer</h1>
+  </body>
+</html>

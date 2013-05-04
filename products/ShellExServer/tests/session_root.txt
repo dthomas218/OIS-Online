@@ -1,0 +1,113 @@
+Session Rooting
+===============
+
+When clicking on the 'View on Enfold Desktop' or in latest versions by
+clicking on the External Editor icon, a 'Session' is created in Enfold
+Desktop.
+
+The 'root' of this session is configurable, so for example if you
+configure a 'session root' at '/sales', and you open a document at
+'/sales/2006/05/02/report.xls', the session root will be created at
+'/sales'.
+
+We will verify the proper functioning of this feature here, and also
+make sure it works properly in a VHM setup.
+
+  >>> from urllib import quote
+  >>> from Testing.ZopeTestCase import user_name, user_password
+  >>> from Products.CMFCore.utils import getToolByName
+  >>> self.setRoles(['Manager'])
+
+Create a simple folder structure:
+
+  >>> _ = self.portal.invokeFactory('Folder', 'public_website')
+  >>> _ = self.portal.public_website.invokeFactory('Folder', 'press_releases')
+  >>> _ = self.portal.public_website.press_releases.invokeFactory('Folder', '2006')
+
+Check the default settings. It defaults to the portal root + the
+user's member folder:
+
+  >>> print http(r"""
+  ... GET /plone/manage_addProduct/ShellExServer/getDesktopSessions HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/octet-stream
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  Content-Length: ...
+  Content-Type: text/plain...
+  <BLANKLINE>
+  [('http://localhost/plone/Members/test_user_1_', 'test_user_1_'), ('http://localhost/plone', '...')]
+
+Now add a configured session pointing to '/public_website/press-releases'
+
+  >>> pp = getToolByName(self.portal, 'portal_properties')
+  >>> desktop = getToolByName(pp, 'plone_desktop_uri')
+  >>> desktop.manage_changeProperties(configured_sessions=('/public_website/press_releases',))
+
+  >>> print http(r"""
+  ... GET /plone/manage_addProduct/ShellExServer/getDesktopSessions HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/octet-stream
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  Content-Length: ...
+  Content-Type: text/plain...
+  <BLANKLINE>
+  [('http://localhost/plone/public_website/press_releases', 'press_releases'), ('http://localhost/plone/Members/test_user_1_', 'test_user_1_'), ('http://localhost/plone', '...')]
+
+Let's access it through Virtual Hosting. Since the root we are
+accessing is not a parent for the Members folder it won't show up:
+
+  >>> adding = self.portal.manage_addProduct['SiteAccess']
+  >>> adding.manage_addVirtualHostMonster('vhm')
+
+  >>> print http(r"""
+  ... GET /plone/VirtualHostBase/http/example.org:80/public_website/VirtualHostRoot/_vh_press/manage_addProduct/ShellExServer/getDesktopSessions HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/octet-stream
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  Content-Length: ...
+  Content-Type: text/plain...
+  <BLANKLINE>
+  [('http://example.org/press/press_releases', 'press_releases'), ('http://example.org/press', 'public_website')]
+
+That was all with the out-of-the-box settings. That is, with the
+'Browser URL' and 'WebDAV URL' left empty. Now, if someone configures
+those URLs to a specific URL:
+
+  >>> desktop.manage_changeProperties(root_plone_desktop='http://another.org/articles')
+
+Now we assume the configured root is the same as the root being
+accessed. For example, if you go straight to Plone, that would be the
+URL to the Plone Site:
+
+  >>> print http(r"""
+  ... GET /plone/manage_addProduct/ShellExServer/getDesktopSessions HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/octet-stream
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  Content-Length: ...
+  Content-Type: text/plain...
+  <BLANKLINE>
+  [('http://localhost/plone/public_website/press_releases', 'press_releases'), ('http://localhost/plone/Members/test_user_1_', 'test_user_1_'), ('http://localhost/plone', '...')]
+
+And if you go through a VHM setup then the root would be the VHM root
+but with the configured url replacing the accessed url:
+
+  >>> print http(r"""
+  ... GET /plone/VirtualHostBase/http/example.org:80/public_website/VirtualHostRoot/_vh_press/manage_addProduct/ShellExServer/getDesktopSessions HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/octet-stream
+  ... """ % (user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 200 OK
+  Content-Length: ...
+  Content-Type: text/plain...
+  <BLANKLINE>
+  [('http://example.org/press/press_releases', 'press_releases'), ('http://example.org/press', 'public_website')]

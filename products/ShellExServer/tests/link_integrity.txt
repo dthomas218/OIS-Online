@@ -1,0 +1,46 @@
+Link Integrity Exceptions
+=========================
+
+Initial Setup:
+
+  >>> from urllib import quote
+  >>> from Testing.ZopeTestCase import user_name, user_password, folder_name
+  >>> self.setRoles(['Manager'])
+
+  >>> import Products.ShellExServer
+  >>> from Products.Five.zcml import load_config, load_site
+  >>> load_config('integrity.zcml', Products.ShellExServer)
+
+  >>> doc = portal.doc1
+  >>> img = portal.image1
+  >>> doc.processForm(values={'text':'<html> <body> %s </body> </html>' % img.tag()})
+  >>> self.assertEqual(doc.getReferences(), [img])
+
+  >>> fname = 'image1'
+  >>> print http(r"""
+  ... DELETE plone/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 500 Internal Server Error
+  ...
+  X-Link-Integrity-Confirmed-Items: ...
+  <BLANKLINE>
+  <?xml version="1.0" encoding="utf-8"?><error><error_type>LinkIntegrityNotificationException</error_type><error_value><![CDATA[<integrity><breaches><item type="Image" title="Test Image 1" url="http://localhost/plone/image1"><sources><item type="Document" title="Test Page 1" url="http://localhost/plone/doc1" accessible="1" /></sources></item></breaches></integrity>]]></error_value></error>
+
+Now we re-send the request with a confirmation header asking to
+confirm the deletion of all items:
+
+  >>> fname = 'image1'
+  >>> print http(r"""
+  ... DELETE plone/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Link-Integrity-Confirm: ALL
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 204 No Content
+  ...
+
+
+
+

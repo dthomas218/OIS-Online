@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<vocabulary-registry>
+ <provider id="transitions" name="Transitions">
+ </provider>
+ <provider id="discussion" name="Discussion">
+ </provider>
+ <provider id="actions" name="Actions">
+ </provider>
+</vocabulary-registry>

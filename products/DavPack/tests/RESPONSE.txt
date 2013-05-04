@@ -1,0 +1,95 @@
+Gzip, Streaming and Conflicts
+=============================
+
+Whenever a ConflictError happens, a request is retried. That means the
+whole processing will start over, a new response object will be
+created and all that. However, if we are 'streaming' content out, like
+we do on a PROPFIND for Enfold Desktop, and a ConflictError happens,
+some (most likely all!) of the content will have been already
+streamed, which could cause the response to contain a duplicate
+body. This test ensures that this should never happen.
+
+ >>> from StringIO import StringIO
+ >>> from ZServer.HTTPResponse import ZServerHTTPResponse as HTTPResponse
+
+ >>> stdout = StringIO()
+ >>> resp = HTTPResponse(stdout=stdout)
+
+ >>> resp.stdout is stdout
+ True
+
+ >>> resp.write('xxx')
+
+ >>> bool(resp._wrote)
+ True
+
+ >>> bool(resp._streaming)
+ True
+
+ >>> bool(resp._chunking)
+ False
+
+ >>> bool(getattr(resp, '_finished', False))
+ False
+
+ >>> print stdout.getvalue()
+ HTTP/1.0 200 OK
+ Server: Zope/2.0 ZServer/2.0
+ Date: ...
+ Connection: close
+ <BLANKLINE>
+ xxx
+
+ >>> resp2 = resp.retry()
+
+ >>> resp2.stdout is stdout
+ True
+
+ >>> bool(resp2._wrote)
+ True
+
+ >>> bool(resp2._streaming)
+ True
+
+ >>> bool(resp2._chunking)
+ False
+
+ >>> bool(getattr(resp2, '_finished', False))
+ True
+
+ >>> resp2.write('yyy')
+
+ >>> print stdout.getvalue()
+ HTTP/1.0 200 OK
+ Server: Zope/2.0 ZServer/2.0
+ Date: ...
+ Connection: close
+ <BLANKLINE>
+ xxx
+
+ >>> resp3 = resp2.retry()
+
+ >>> resp3.stdout is stdout
+ True
+
+ >>> bool(resp3._wrote)
+ True
+
+ >>> bool(resp3._streaming)
+ True
+
+ >>> bool(resp3._chunking)
+ False
+
+ >>> bool(getattr(resp3, '_finished', False))
+ True
+
+ >>> resp3.write('zzz')
+
+ >>> print stdout.getvalue()
+ HTTP/1.0 200 OK
+ Server: Zope/2.0 ZServer/2.0
+ Date: ...
+ Connection: close
+ <BLANKLINE>
+ xxx

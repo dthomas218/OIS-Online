@@ -1,0 +1,17 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope">
+  
+  <adapter
+      factory=".profile.PropertySetRegistryFileExportImportAdapter"
+      provides="Products.GenericSetup.interfaces.IFilesystemExporter"
+      for=".interfaces.registry.IPropertySetRegistry"
+      />
+
+  <adapter
+      factory=".profile.PropertySetRegistryFileExportImportAdapter"
+      provides="Products.GenericSetup.interfaces.IFilesystemImporter"
+      for=".interfaces.registry.IPropertySetRegistry"
+      />
+
+</configure>
+

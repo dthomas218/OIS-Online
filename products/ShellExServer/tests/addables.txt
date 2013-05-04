@@ -1,0 +1,174 @@
+Customizing the 'Add New' dropdown for Plone Desktop
+====================================================
+
+The 'Add New' menu on Plone Desktop is composed by two things:
+
+1. Content types that can be added on the Plone site
+2. Document Templates registered by the OS
+
+You can control what are the content types that show up in the add
+menu from Plone, but the same is not true for the OS templates.
+
+For Plone, the list of types that can be added is computed from two
+axis:
+
+1. The list of addable types for the container
+2. The list of types registered with the ``Content Type Registry``
+
+The content type registry is an object that sits on the root of the
+Plone site and dictates which kind of content is created when a object
+is created via ``WebDAV``.
+
+When building the final list of content types that will be available
+to Plone Desktop, we first fetch the list of addable types, then the
+list of types registered with the ``Content Type Registry`` that have
+a ``Extension Predicate``.
+
+Why this is done? Because the most reliable way of creating a object
+with the smaller amount of side effects is based on the extension.
+
+Out-of-the-box the Server has the following settings:
+
+  >>> from Products.CMFCore.utils import getToolByName
+  >>> from Products.CMFCore.ContentTypeRegistry import ExtensionPredicate
+  >>> context = self.portal
+
+Get hold of the Content Type Registry:
+
+  >>> ctr = getToolByName(context, 'content_type_registry')
+
+listPredicates() returns (id, (predicate, type name)):
+
+  >>> addnew = [(pred, tname) for (id, (pred, tname)) in ctr.listPredicates()]
+
+Filter out all but ExtensionPredicate:
+
+  >>> addnew = filter(lambda x: isinstance(x[0], ExtensionPredicate), addnew)
+
+Split extensions (there may be more than one per predicate)
+
+  >>> addnew = [(p.getExtensions().split(), t) for p, t in addnew]
+
+  >>> for extensions, tname in addnew:
+  ...     print '%s: %s' % (', '.join(extensions), tname)
+  fld: Folder
+  url: Link
+  ics: Event
+  evt: Event
+  jpg: Image
+  png: Image
+  bmp: Image
+  ico: Image
+  gif: Image
+  bin: File
+  html: Document
+  htm: Document
+  stx: Document
+  rst: Document
+  txt: Document
+  ics, vcs: Folder
+  news: News Item
+  link, url: Link
+  event: Event
+  fav: Favorite
+  txt, stx, rst, rest, py: Document
+  jpg, jpeg, png, gif: Image
+
+And there's also a ``catch all`` predicate, which maps everything that
+passes through to a ``File`` object.
+
+  >>> print ctr.getTypeObjectName('catch_all')
+  File
+
+Now, we are going to define a simple function to ease testing and do
+some playing around:
+
+  >>> def addables(container):
+  ...     psets = dict(container.propertysheets.items())
+  ...     pset = psets['addables']
+  ...     items = list(pset._getAddables())
+  ...     items.sort()
+  ...     for item in items:
+  ...         print item['title']
+
+We are logged in as the ``Portal Owner``. Should be able to add mostly
+anything to the root:
+
+  >>> addables(self.portal)
+  File
+  Folder
+  Document
+  Event
+  Image
+  News Item
+  Link
+
+Logging out, should not be able to add stuff anymore:
+
+  >>> self.logout()
+  >>> addables(self.portal)
+
+Create and log in as a ``Member``. Should not be allowed to create
+anything at the portal root:
+
+  >>> uf = self.portal.acl_users
+  >>> uf.userFolderAddUser('test1', '123', ['Member'], [])
+  >>> mt = getToolByName(self.portal, 'portal_membership')
+  >>> if not mt.getMemberareaCreationFlag():
+  ...    _ = mt.setMemberareaCreationFlag()
+  >>> self.login('test1')
+  >>> mt.createMemberarea('test1')
+
+  >>> addables(self.portal)
+
+However, should be able to create anything on his home folder:
+
+  >>> addables(self.portal.Members.test1)
+  File
+  Folder
+  Document
+  Event
+  Image
+  News Item
+  Link
+
+Back to Portal Owner:
+
+  >>> self.loginAsPortalOwner()
+
+Suppose you want to disable the creation of the ``Event`` type from
+Plone Desktop. Simple! Just remove the predicate for the Event type
+from the Content Type Registry:
+
+  >>> ctr.removePredicate('event_extension_evt')
+  >>> ctr.removePredicate('event_extension_ics')
+  >>> ctr.removePredicate('ATEvent_ext')
+
+And now, the Event type doesn't show up anymore on the list of
+addables.
+
+  >>> addables(self.portal)
+  File
+  Folder
+  Document
+  Image
+  News Item
+  Link
+
+Notes:
+
+- The order of the items is the same order as they appear in the
+  ``Content Type Registry``. There's a facility to order the predicates
+  there, so in theory you should be able to use that to order the ``Add
+  New`` menu.
+
+- The ``Folder`` item is there just so that the ``Add New Folder``
+  entry appears in Plone Desktop. Creating folders doesn't happen the
+  same way as other content objects. Instead, a ``MKCOL`` command is
+  issued. The usual procedures for controlling ``MKCOL`` on a standard
+  CMF site apply.
+
+- It should be possible to create other folderish types the standard
+  way and disable the ``Add New Folder`` entry by removing the
+  predicate for ``Folder`` from the ``Content Types Registry``.
+

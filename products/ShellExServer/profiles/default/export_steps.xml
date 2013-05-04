@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<export-steps>
+  <export-step 
+      id="property-set-registry" version="20070919-01"
+      handler="Products.PropertySets.profile.exportPropertySetRegistry"
+      title="PropertySets Registry">
+    Export PropertySets Registry
+  </export-step>
+  <export-step 
+      id="global-vocabulary-registry" version="20071102-01"
+      handler="Products.ShellExServer.profile.exportGlobalVocabRegistry"
+      title="Global Vocabulary Registry">
+    Export Global Vocabulary Registry
+  </export-step>
+  <export-step 
+      id="local-vocabulary-registry" version="20071102-01"
+      handler="Products.ShellExServer.profile.exportLocalVocabRegistry"
+      title="Local Vocabulary Registry">
+    Export Local Vocabulary Registry
+  </export-step>
+</export-steps>

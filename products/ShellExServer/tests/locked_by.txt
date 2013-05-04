@@ -1,0 +1,371 @@
+Plone Root
+==========
+
+Here we have some tests for the locked_by property of the permissions
+dav namespace.
+
+First, let's create two users for this test:
+
+  >>> user1, pass1 = u'user1\xa9'.encode('utf-8'), 'pass1'
+  >>> user2, pass2 = u'user2\xa9'.encode('utf-8'), 'pass2'
+  >>> uf = self.portal.acl_users
+  >>> uf.userFolderAddUser(user1, pass1, ['Manager'], [])
+  >>> uf.userFolderAddUser(user2, pass2, ['Manager'], [])
+
+Set a fullname for those users, with extended chcaracters:
+
+  >>> member = self.portal.portal_membership.getMemberById(user1)
+  >>> member.setMemberProperties({
+  ... 'fullname': u'A user from Paran\xc3\xa1'.encode('utf-8')})
+
+  >>> member = self.portal.portal_membership.getMemberById(user2)
+  >>> member.setMemberProperties({
+  ... 'fullname':u'Another user from Paran\xc3\xa1'.encode('utf-8')})
+
+Check that we actually have a Document as index_html:
+
+  >>> not 'index_html' in self.portal.objectIds()
+  True
+
+  >>> _ = self.portal.invokeFactory('Document', 'index_html')
+  >>> print self.portal.index_html.getPortalTypeName()
+  Document
+
+First user gets a lock. Response includes the lock token in header and
+also as part of the lockdiscover/activelock properties:
+
+  >>> print http(r"""
+  ... LOCK /plone/index_html HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/xml
+  ... Depth: 0
+  ... Te: trailers
+  ... 
+  ... <?xml version="1.0" encoding="utf-8"?>
+  ... <lockinfo xmlns='DAV:'>
+  ...  <lockscope><exclusive/></lockscope>
+  ... <locktype><write/></locktype>
+  ... <owner>user1</owner></lockinfo>
+  ... """ % (user1, pass1))
+  HTTP/1.1 200 OK
+  ...
+  Lock-Token: opaquelocktoken:...00105A989226...
+  <BLANKLINE>
+  <?xml version="1.0" encoding="utf-8" ?>
+  <d:prop xmlns:d="DAV:">
+   <d:lockdiscovery>
+     <d:activelock>
+    <d:locktype><d:write/></d:locktype>
+    <d:lockscope><d:exclusive/></d:lockscope>
+    <d:depth>0</d:depth>
+    <d:owner>user1</d:owner>
+    <d:timeout>Second-720</d:timeout>
+    <d:locktoken>
+     <d:href>opaquelocktoken:...00105A989226...</d:href>
+    </d:locktoken>
+   </d:activelock>
+  <BLANKLINE>
+   </d:lockdiscovery>
+  </d:prop>
+
+Doing a PROPFIND request with this user to get the locked_by property
+from the permissions namespace:
+
+  >>> print http(r"""
+  ... PROPFIND /plone/index_html HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/xml
+  ... Depth: 0
+  ... Te: trailers
+  ... 
+  ... <?xml version="1.0" encoding="utf-8"?>
+  ... <propfind xmlns="DAV:"><prop>
+  ... <locked_by xmlns="http://enfoldtechnology.com/propsets/permissions" />
+  ... </prop></propfind>
+  ... """ % (user1, pass1))
+  HTTP/1.1 207 Multi-Status
+  ...
+  <BLANKLINE>
+  <?xml version="1.0" encoding="utf-8"?>
+  <d:multistatus xmlns:d="DAV:">
+  <d:response>
+  <d:href>/plone/index_html</d:href>
+  <d:propstat>
+    <d:prop>
+  <n:locked_by xmlns:n="http://enfoldtechnology.com/propsets/permissions"><records><record><value name="id">user1©</value><value name="name">A user from ParanÃ¡</value></record></records></n:locked_by>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  </d:response>
+  </d:multistatus>
+
+Doing a PROPFIND request using the other user to get the locked_by
+property should work as well:
+
+  >>> print http(r"""
+  ... PROPFIND /plone/index_html HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/xml
+  ... Depth: 0
+  ... Te: trailers
+  ... 
+  ... <?xml version="1.0" encoding="utf-8"?>
+  ... <propfind xmlns="DAV:"><prop>
+  ... <locked_by xmlns="http://enfoldtechnology.com/propsets/permissions" />
+  ... </prop></propfind>
+  ... """ % (user1, pass1))
+  HTTP/1.1 207 Multi-Status
+  ...
+  <BLANKLINE>
+  <?xml version="1.0" encoding="utf-8"?>
+  <d:multistatus xmlns:d="DAV:">
+  <d:response>
+  <d:href>/plone/index_html</d:href>
+  <d:propstat>
+    <d:prop>
+  <n:locked_by xmlns:n="http://enfoldtechnology.com/propsets/permissions"><records><record><value name="id">user1©</value><value name="name">A user from ParanÃ¡</value></record></records></n:locked_by>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  </d:response>
+  </d:multistatus>
+
+Let's clear the existing locks:
+
+  >>> self.portal.index_html.wl_clearLocks()
+
+Now, though the HTTP/WebDAV interfaces prevent the creation of more
+than one lock at a time, nothing prevents the creation of multiple
+locks from inside Zope:
+
+  >>> from webdav.LockItem import LockItem
+
+  >>> creator = self.portal.acl_users.getUserById(user1)
+  >>> lock = LockItem(creator)
+  >>> token = lock.getLockToken()
+  >>> self.portal.index_html.wl_setLock(token, lock)
+
+  >>> creator = self.portal.acl_users.getUserById(user2)
+  >>> lock = LockItem(creator, owner='user2')
+  >>> token = lock.getLockToken()
+  >>> self.portal.index_html.wl_setLock(token, lock)
+
+  >>> len(self.portal.index_html.wl_lockValues())
+  2
+
+Doing a PROPFIND request with a user to get the locked_by property
+from the permissions namespace should list both users as lock owners:
+
+  >>> print http(r"""
+  ... PROPFIND /plone/index_html HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/xml
+  ... Depth: 0
+  ... Te: trailers
+  ... 
+  ... <?xml version="1.0" encoding="utf-8"?>
+  ... <propfind xmlns="DAV:"><prop>
+  ... <locked_by xmlns="http://enfoldtechnology.com/propsets/permissions" />
+  ... </prop></propfind>
+  ... """ % (user1, pass1))
+  HTTP/1.1 207 Multi-Status
+  ...
+  <BLANKLINE>
+  <?xml version="1.0" encoding="utf-8"?>
+  <d:multistatus xmlns:d="DAV:">
+  <d:response>
+  <d:href>/plone/index_html</d:href>
+  <d:propstat>
+    <d:prop>
+  <n:locked_by xmlns:n="http://enfoldtechnology.com/propsets/permissions"><records><record><value name="id">user1©</value><value name="name">A user from ParanÃ¡</value></record><record><value name="id">user2©</value><value name="name">Another user from ParanÃ¡</value></record></records></n:locked_by>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  </d:response>
+  </d:multistatus>
+
+Zope Root
+=========
+
+Now, repeat and rinse with a folder without the plone portal object:
+
+First, let's create two users for this test:
+
+  >>> root = self.portal.unrestrictedTraverse('/')
+
+Create a property set registry and a permissions property predicate on
+the root:
+
+  >>> from StringIO import StringIO
+  >>> from Products.ShellExServer.Extensions.Install import install_tool
+  >>> from Products.ShellExServer.Extensions.Install import install_predicates
+
+  >>> out = StringIO()
+  >>> install_tool(root, out)
+  >>> install_predicates(root, out, ids=('permissions',))
+
+Setup management_page_charset on the root:
+
+  >>> root.manage_addProperty('management_page_charset', 'utf-8', 'string')
+
+  >>> _ = root.manage_addFile('dav_test', '')
+  >>> dav_test = root._getOb('dav_test')
+  >>> uf = root.acl_users
+
+  >>> user1, pass1 = u'user3\xa9'.encode('utf-8'), 'pass1'
+  >>> user2, pass2 = u'user4\xa9'.encode('utf-8'), 'pass2'
+  >>> uf.userFolderAddUser(user1, pass1, ['Manager'], [])
+  >>> uf.userFolderAddUser(user2, pass2, ['Manager'], [])
+
+First user gets a lock. Response includes the lock token in header and
+also as part of the lockdiscover/activelock properties:
+
+  >>> print http(r"""
+  ... LOCK /dav_test HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/xml
+  ... Depth: 0
+  ... Te: trailers
+  ... 
+  ... <?xml version="1.0" encoding="utf-8"?>
+  ... <lockinfo xmlns='DAV:'>
+  ...  <lockscope><exclusive/></lockscope>
+  ... <locktype><write/></locktype>
+  ... <owner>user1</owner></lockinfo>
+  ... """ % (user1, pass1))
+  HTTP/1.1 200 OK
+  ...
+  Lock-Token: opaquelocktoken:...00105A989226...
+  <BLANKLINE>
+  <?xml version="1.0" encoding="utf-8" ?>
+  <d:prop xmlns:d="DAV:">
+   <d:lockdiscovery>
+     <d:activelock>
+    <d:locktype><d:write/></d:locktype>
+    <d:lockscope><d:exclusive/></d:lockscope>
+    <d:depth>0</d:depth>
+    <d:owner>user1</d:owner>
+    <d:timeout>Second-720</d:timeout>
+    <d:locktoken>
+     <d:href>opaquelocktoken:...00105A989226...</d:href>
+    </d:locktoken>
+   </d:activelock>
+  <BLANKLINE>
+   </d:lockdiscovery>
+  </d:prop>
+
+Doing a PROPFIND request with this user to get the locked_by property
+from the permissions namespace:
+
+  >>> print http(r"""
+  ... PROPFIND /dav_test HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/xml
+  ... Depth: 0
+  ... Te: trailers
+  ... 
+  ... <?xml version="1.0" encoding="utf-8"?>
+  ... <propfind xmlns="DAV:"><prop>
+  ... <locked_by xmlns="http://enfoldtechnology.com/propsets/permissions" />
+  ... </prop></propfind>
+  ... """ % (user1, pass1))
+  HTTP/1.1 207 Multi-Status
+  ...
+  <BLANKLINE>
+  <?xml version="1.0" encoding="utf-8"?>
+  <d:multistatus xmlns:d="DAV:">
+  <d:response>
+  <d:href>/dav_test</d:href>
+  <d:propstat>
+    <d:prop>
+  <n:locked_by xmlns:n="http://enfoldtechnology.com/propsets/permissions"><records><record><value name="id">user3©</value><value name="name">user3©</value></record></records></n:locked_by>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  </d:response>
+  </d:multistatus>
+
+Doing a PROPFIND request using the other user to get the locked_by
+property should work as well:
+
+  >>> print http(r"""
+  ... PROPFIND /dav_test HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/xml
+  ... Depth: 0
+  ... Te: trailers
+  ... 
+  ... <?xml version="1.0" encoding="utf-8"?>
+  ... <propfind xmlns="DAV:"><prop>
+  ... <locked_by xmlns="http://enfoldtechnology.com/propsets/permissions" />
+  ... </prop></propfind>
+  ... """ % (user1, pass1))
+  HTTP/1.1 207 Multi-Status
+  ...
+  <BLANKLINE>
+  <?xml version="1.0" encoding="utf-8"?>
+  <d:multistatus xmlns:d="DAV:">
+  <d:response>
+  <d:href>/dav_test</d:href>
+  <d:propstat>
+    <d:prop>
+  <n:locked_by xmlns:n="http://enfoldtechnology.com/propsets/permissions"><records><record><value name="id">user3©</value><value name="name">user3©</value></record></records></n:locked_by>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  </d:response>
+  </d:multistatus>
+
+Let's clear the existing locks:
+
+  >>> dav_test.wl_clearLocks()
+
+Now, though the HTTP/WebDAV interfaces prevent the creation of more
+than one lock at a time, nothing prevents the creation of multiple
+locks from inside Zope:
+
+  >>> from webdav.LockItem import LockItem
+
+  >>> creator = uf.getUserById(user1).__of__(uf)
+  >>> lock = LockItem(creator)
+  >>> token = lock.getLockToken()
+  >>> dav_test.wl_setLock(token, lock)
+
+  >>> creator = uf.getUserById(user2).__of__(uf)
+  >>> lock = LockItem(creator, owner='user2')
+  >>> token = lock.getLockToken()
+  >>> dav_test.wl_setLock(token, lock)
+
+  >>> len(dav_test.wl_lockValues())
+  2
+
+Doing a PROPFIND request with a user to get the locked_by property
+from the permissions namespace should list both users as lock owners:
+
+  >>> print http(r"""
+  ... PROPFIND /dav_test HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/xml
+  ... Depth: 0
+  ... Te: trailers
+  ... 
+  ... <?xml version="1.0" encoding="utf-8"?>
+  ... <propfind xmlns="DAV:"><prop>
+  ... <locked_by xmlns="http://enfoldtechnology.com/propsets/permissions" />
+  ... </prop></propfind>
+  ... """ % (user1, pass1))
+  HTTP/1.1 207 Multi-Status
+  ...
+  <BLANKLINE>
+  <?xml version="1.0" encoding="utf-8"?>
+  <d:multistatus xmlns:d="DAV:">
+  <d:response>
+  <d:href>/dav_test</d:href>
+  <d:propstat>
+    <d:prop>
+  <n:locked_by xmlns:n="http://enfoldtechnology.com/propsets/permissions"><records><record><value name="id">user3©</value><value name="name">user3©</value></record><record><value name="id">user4©</value><value name="name">user4©</value></record></records></n:locked_by>
+    </d:prop>
+    <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  </d:response>
+  </d:multistatus>

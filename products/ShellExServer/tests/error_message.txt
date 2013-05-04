@@ -1,0 +1,93 @@
+BadRequest exceptions
+=====================
+
+Initial Setup:
+
+  >>> from urllib import quote
+  >>> from Testing.ZopeTestCase import user_name, user_password, folder_name
+  >>> self.setRoles(['Manager'])
+
+Disable Filename Normalization:
+
+  >>> from Products.CMFCore.utils import getToolByName
+  >>> props = getToolByName(self.portal, 'portal_properties')
+  >>> desktop = getToolByName(props, 'plone_desktop_uri')
+
+  >>> desktop.manage_changeProperties(filename_normalization=False)
+  >>> desktop.getProperty('filename_normalization', True)
+  False
+
+Now, create a file with some bad characters in the name:
+
+  >>> _ = self.portal.invokeFactory('Folder', 'test-folder')
+
+  >>> fname = 'hoover[1].doc'
+  >>> print httpx(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 400 Bad Request
+  ...
+  X-Error-Log-Url: http://localhost/plone/test-folder/showUserError?id=...
+  <error>
+      <error_type>BadRequest</error_type>
+      <error_value>The id "hoover[1].doc" contains characters illegal in URLs.</error_value>
+  </error>
+  <BLANKLINE>
+  <BLANKLINE>
+  Error Response:
+  <BLANKLINE>
+  HTTP/1.1 200 OK
+  Content-Length: ...
+  Content-Type: text/plain; charset=...
+  <BLANKLINE>
+  Content-Type: multipart/mixed; boundary=...
+  MIME-Version: 1.0
+  From: test_user_1_@...
+  To: bugs@enfoldsystems.com
+  Date: ...
+  Subject: BadRequest at http://localhost/plone/test-folder/hoover%5B1%5D.doc/PUT
+  X-Error-Username: test_user_1_
+  X-Error-Url: http://localhost/plone/test-folder/hoover%5B1%5D.doc/PUT
+  X-Error-Userid: test_user_1_
+  X-Error-Type: BadRequest
+  X-Error-Id: ...
+
+Same thing, but this time with a non-ascii character. Make sure that
+the XML-formatted error is proper utf-8:
+
+  >>> fname = u'\xa9opy.doc'.encode('utf-8')
+  >>> print httpx(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 400 Bad Request
+  ...
+  X-Error-Log-Url: http://localhost/plone/test-folder/showUserError?id=...
+  <error>
+      <error_type>BadRequest</error_type>
+      <error_value>The id "©opy.doc" contains characters illegal in URLs.</error_value>
+  </error>
+  <BLANKLINE>
+  <BLANKLINE>
+  Error Response:
+  <BLANKLINE>
+  HTTP/1.1 200 OK
+  Content-Length: ...
+  Content-Type: text/plain; charset=...
+  <BLANKLINE>
+  Content-Type: multipart/mixed; boundary=...
+  MIME-Version: 1.0
+  From: test_user_1_@...
+  To: bugs@enfoldsystems.com
+  Date: ...
+  Subject: BadRequest at http://localhost/plone/test-folder/%C2%A9opy.doc/PUT
+  X-Error-Username: test_user_1_
+  X-Error-Url: http://localhost/plone/test-folder/%C2%A9opy.doc/PUT
+  X-Error-Userid: test_user_1_
+  X-Error-Type: BadRequest
+  X-Error-Id: ...
+
+
