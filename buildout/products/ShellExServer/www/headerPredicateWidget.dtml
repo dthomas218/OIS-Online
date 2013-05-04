@@ -1,0 +1,25 @@
+<dtml-comment>
+   This snippet is designed to be included in a larger method;  it
+   provides input elements for a predicate which is based on matching
+   request headers.
+</dtml-comment>
+<input type="hidden"
+       name="predicate.id:record"
+       value="&dtml-getId;" />
+<strong> Header Name: </strong>
+<input type="text"
+       name="predicate.header_name:record"
+       size="30"
+       value="<dtml-var getHeaderName>"
+       />
+<em> name to be matched on incoming request. </em>
+<br />
+<strong> Header Value: </strong>
+<select name="predicate.portal_type_name:record">
+  <dtml-in "portal_types.listContentTypes()">
+    <option value="<dtml-var sequence-item>"
+      <dtml-if "_['sequence-item']==getPortalTypeName()">selected="selected"</dtml-if>
+    ><dtml-var sequence-item></option>
+  </dtml-in>
+</select>
+<em> value to be matched against. </em>

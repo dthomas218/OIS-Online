@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<property-set-registry xmlns:tal="http://xml.zope.org/namespaces/tal">
+ <predicate
+    id="PREDICATE_ID"
+    title="PREDICATE_TITLE"
+    expression="PREDICATE_EXPRESSION"
+    permission="PREDICATE_PERMISSION"
+    tal:repeat="pt context/listPredicates"
+    tal:attributes="id pt/id;
+                    title pt/title;
+                    expression pt/expression;
+                    permission pt/permission;">
+ </predicate>
+</property-set-registry>

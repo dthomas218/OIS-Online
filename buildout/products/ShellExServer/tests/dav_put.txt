@@ -1,0 +1,1526 @@
+DAV 'PUT' Tests
+===============
+
+Filename Normalization
+----------------------
+
+As of Enfold Desktop 2.3.1, a new feature got introduced that allows
+the use of non-ascii filenames in a limited fashion.
+
+This feature is controlled by a setting in Plone Setup -> Enfold
+Desktop.
+
+If the feature is enabled, the file will be renamed internally and a
+special header 'X-Renamed-To' will be sent back informing of the
+change.
+
+  >>> from urllib import quote
+  >>> from Testing.ZopeTestCase import user_name, user_password, folder_name
+  >>> self.setRoles(['Manager'])
+
+Note it's now enabled by default:
+
+  >>> from Products.CMFCore.utils import getToolByName
+  >>> props = getToolByName(self.portal, 'portal_properties')
+  >>> desktop = getToolByName(props, 'plone_desktop_uri')
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+  >>> _ = self.portal.invokeFactory('Folder', 'test-folder')
+
+
+Let's disable it now to test different kinds of configurations:
+
+  >>> desktop.manage_changeProperties(filename_normalization=False)
+  >>> desktop.getProperty('filename_normalization', True)
+  False
+
+Creating arbitrary files should hit the 'catch all' CTR predicate and
+create a 'File' object.
+
+A file with spaces in the name. Content Type was sent as
+'application/octet-stream':
+
+  >>> fname = 'Stupid Named File Without Extension'
+  >>> print http(r"""
+  ... PUT plone/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: application/octet-stream
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.portal._getOb(fname).getPortalTypeName()
+  File
+
+A file with spaces in the name. A 'unknown' (to the CTR) content type
+has been sent:
+
+
+  >>> fname = 'Another Stupid Named File Without Extension'
+  >>> print http(r"""
+  ... PUT plone/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... Content-Type: chemical/x-pdb
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.portal._getOb(fname).getPortalTypeName()
+  File
+
+A file with 'Word Perfect 5' extension:
+
+  >>> fname = 'mywpdocument.wp5'
+  >>> print http(r"""
+  ... PUT plone/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.portal._getOb(fname).getPortalTypeName()
+  File
+
+
+Enabling Normalization
+----------------------
+
+It might happen that you've already created some files with spaces on
+the filename.
+
+  >>> fname = 'File With Spaces.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  Accept-Ranges: none
+  Content-Length: 0
+  Date: ...
+
+  >>> fname = 'Another File With Spaces.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  Accept-Ranges: none
+  Content-Length: 0
+  Date: ...
+
+Note that before enabling normalization, creating files with non-ascii
+characters on the filename doesn't work at all:
+
+  >>> fname = 'Arquivo com Espaços.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 400 Bad Request...
+
+Now supposing you enable normalization but the file already existed,
+you want the file being uploaded to keep the original filename so that
+it updates the existing file instead of creating a new one:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=True)
+  >>> desktop.getProperty('relaxed_normalization', False)
+  True
+
+  >>> fname = 'File With Spaces.doc'
+  >>> res = http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+
+  >>> print res
+  HTTP/1.1 204 No Content
+  Accept-Ranges: none
+  Content-Length: 0
+  Date: ...
+  <BLANKLINE>
+
+  >>> str(res).find('X-Renamed-To')
+  -1
+
+  >>> orig_fname = 'Another File With Spaces.doc'
+  >>> fname = 'File With Spaces.doc'
+  >>> res = http(r"""
+  ... MOVE plone/test-folder/%s HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Overwrite: T
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(orig_fname), fname, user_name, user_password),
+  ...        handle_errors=True)
+
+
+  >>> print res
+  HTTP/1.1 204 No Content
+  Accept-Ranges: none
+  Content-Length: 0
+  Date: ...
+  <BLANKLINE>
+
+  >>> str(res).find('X-Renamed-To')
+  -1
+
+
+Full Normalization
+------------------
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+A file with brazilian portuguese characters:
+
+  >>> fname = 'Isto é uma Aberração.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: isto-e-uma-aberracao.doc
+
+
+Another put of a file with the same name:
+
+  >>> fname = 'Isto é uma Aberração.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 204 No Content
+  ...
+  X-Renamed-To: isto-e-uma-aberracao.doc
+
+
+A folder with brazilian portuguese characters:
+
+  >>> fname = 'Isto é que é uma Aberração'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: isto-e-que-e-uma-aberracao
+
+
+Another MKCOL with the same folder name:
+
+  >>> fname = 'Isto é que é uma Aberração'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 405 Method Not Allowed
+  ...
+  X-Renamed-To: isto-e-que-e-uma-aberracao...
+
+Another MKCOL with the same folder name, now in the '/Members' folder, should be allowed (it wasn't at some point because Large Plone Folder was not allowed inside it):
+
+  >>> fname = 'Isto é que é uma Aberração'
+  >>> print http(r"""
+  ... MKCOL plone/Members/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: isto-e-que-e-uma-aberracao...
+
+Now a COPY with some brazilian portuguese:
+
+  >>> _ = self.portal['test-folder'].invokeFactory('Document', 'test-gravacao')
+
+  >>> fname = 'Isto é uma Gravação.doc'
+  >>> print http(r"""
+  ... COPY plone/test-folder/test-gravacao HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: isto-e-uma-gravacao.doc
+
+
+And a MOVE with some brazilian portuguese:
+
+  >>> _ = self.portal['test-folder'].invokeFactory('Document', 'test-divida')
+
+  >>> fname = 'Aquela Dívida.doc'
+  >>> print http(r"""
+  ... MOVE plone/test-folder/test-divida HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: aquela-divida.doc
+
+
+Relaxed Normalization
+---------------------
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=True)
+  >>> desktop.getProperty('relaxed_normalization', False)
+  True
+
+  >>> self.portal.manage_delObjects(ids=['test-folder'])
+  >>> _ = self.portal.invokeFactory('Folder', 'test-folder')
+
+A file with brazilian portuguese characters:
+
+  >>> fname = 'Isto é uma Aberração.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: Isto e uma Aberracao.doc
+
+
+Another put of a file with the same name:
+
+  >>> fname = 'Isto é uma Aberração.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 204 No Content
+  ...
+  X-Renamed-To: Isto e uma Aberracao.doc
+
+
+A folder with brazilian portuguese characters:
+
+  >>> fname = 'Isto é que é uma Aberração'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: Isto e que e uma Aberracao
+
+
+Another MKCOL with the same folder name:
+
+  >>> fname = 'Isto é que é uma Aberração'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 405 Method Not Allowed
+  ...
+  X-Renamed-To: Isto e que e uma Aberracao...
+
+
+Now a COPY with some brazilian portuguese:
+
+  >>> _ = self.portal['test-folder'].invokeFactory('Document', 'test-gravacao')
+
+  >>> fname = 'Isto é uma Gravação.doc'
+  >>> print http(r"""
+  ... COPY plone/test-folder/test-gravacao HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: Isto e uma Gravacao.doc
+
+
+And a MOVE with some brazilian portuguese:
+
+  >>> _ = self.portal['test-folder'].invokeFactory('Document', 'test-divida')
+
+  >>> fname = 'Aquela Dívida.doc'
+  >>> print http(r"""
+  ... MOVE plone/test-folder/test-divida HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: Aquela Divida.doc
+
+Renaming a file when Title hasn't changed (#339)
+================================================
+
+  >>> catalog = getToolByName(self.portal, 'portal_catalog')
+  >>> def search(q, catalog=catalog):
+  ...     return len(catalog(Title=q))
+
+We will test those with full normalization for sanity:
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Suppose you created a file:
+
+  >>> fname = 'New Word Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-word-document.doc
+
+You can see that the title matches the original filename, even though
+the file has been renamed (see X-Renamed-To header above):
+
+  >>> self.portal['test-folder']['new-word-document.doc'].Title()
+  'New Word Document.doc'
+
+Make sure the title is indexed:
+
+  >>> search(fname)
+  1
+
+Now, suppose you renamed this file by doing a MOVE. If you didn't
+change the title in the meantime (ie: if the normalized title matches
+the normalized filename) then the title will be changed as well.
+
+  >>> fname = 'Weekly Status Report.doc'
+  >>> print http(r"""
+  ... MOVE plone/test-folder/new-word-document.doc HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: weekly-status-report.doc
+
+Just checking for the new title:
+
+  >>> self.portal['test-folder']['weekly-status-report.doc'].Title()
+  'Weekly Status Report.doc'
+
+Make sure the title it's indexed:
+
+  >>> search(fname)
+  1
+
+Same as above, only for a folder now:
+
+  >>> fname = '2006 Reports'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: 2006-reports
+
+  >>> self.portal['test-folder']['2006-reports'].Title()
+  '2006 Reports'
+
+  >>> fname = '2007 Reports'
+  >>> print http(r"""
+  ... MOVE plone/test-folder/2006-reports HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: 2007-reports
+
+  >>> self.portal['test-folder']['2007-reports'].Title()
+  '2007 Reports'
+
+Make sure the title is indexed:
+
+  >>> search(fname)
+  1
+
+The same should also hold true if the normalization feature is
+disabled, so we are going to test it all again:
+
+  >>> desktop.manage_changeProperties(filename_normalization=False)
+  >>> desktop.getProperty('filename_normalization', True)
+  False
+
+Suppose you created a file:
+
+  >>> fname = 'New Wave Audio File.wav'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created...
+
+You can see that the title matches the original filename, and that the
+file has not been renamed:
+
+  >>> self.portal['test-folder']['New Wave Audio File.wav'].Title()
+  'New Wave Audio File.wav'
+
+Make sure the title it's indexed:
+
+  >>> search(fname)
+  1
+
+Now, suppose you renamed this file by doing a MOVE. If you didn't
+change the title in the meantime (ie: if the normalized title matches
+the normalized filename) then the title will be changed as well.
+
+  >>> old_fname = 'New Wave Audio File.wav'
+  >>> fname = 'Status Meeting.wav'
+  >>> print http(r"""
+  ... MOVE plone/test-folder/%s HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(old_fname), fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created...
+
+Just checking for the new title:
+
+  >>> self.portal['test-folder']['Status Meeting.wav'].Title()
+  'Status Meeting.wav'
+
+Make sure the title it's indexed:
+
+  >>> search(fname)
+  1
+
+Same as above, only for a folder now:
+
+  >>> fname = 'June Meetings'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created...
+
+  >>> self.portal['test-folder']['June Meetings'].Title()
+  'June Meetings'
+
+  >>> old_fname = 'June Meetings'
+  >>> fname = 'June Status Meetings'
+  >>> print http(r"""
+  ... MOVE plone/test-folder/%s HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(old_fname), fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created...
+
+  >>> self.portal['test-folder']['June Status Meetings'].Title()
+  'June Status Meetings'
+
+Make sure the title it's indexed:
+
+  >>> search(fname)
+  1
+
+Renaming a file to a already normalized filename (#462)
+=======================================================
+
+We will test those with full normalization for sanity:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Suppose you created a file:
+
+  >>> fname = 'Desktop 3 Spec.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: desktop-3-spec.doc
+
+You can see that the title matches the original filename, even though
+the file has been renamed (see X-Renamed-To header above):
+
+  >>> self.portal['test-folder']['desktop-3-spec.doc'].Title()
+  'Desktop 3 Spec.doc'
+
+Make sure the title it's indexed:
+
+  >>> search(fname)
+  1
+
+Now, suppose you renamed this file by doing a MOVE. If you didn't
+change the title in the meantime (ie: if the normalized title matches
+the normalized filename), but the new filename is already
+'normalized'. We used to not change the title in this case, but now we
+do because that caused confusion.
+
+  >>> fname = 'desktop-3-spec-draft.doc'
+  >>> print http(r"""
+  ... MOVE plone/test-folder/desktop-3-spec.doc HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: desktop-3-spec-draft.doc
+
+Just checking for the title:
+
+  >>> self.portal['test-folder']['desktop-3-spec-draft.doc'].Title()
+  'desktop-3-spec-draft.doc'
+
+Make sure the title it's indexed:
+
+  >>> search('desktop-3-spec-draft.doc')
+  1
+
+Same as above, only for a folder now:
+
+  >>> fname = 'Proxy 3'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: proxy-3
+
+  >>> self.portal['test-folder']['proxy-3'].Title()
+  'Proxy 3'
+
+  >>> fname = 'proxy-3-final'
+  >>> print http(r"""
+  ... MOVE plone/test-folder/proxy-3 HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... """ % (fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: proxy-3-final
+
+  >>> self.portal['test-folder']['proxy-3-final'].Title()
+  'proxy-3-final'
+
+Make sure the title it's indexed:
+
+  >>> search('proxy-3-final')
+  1
+
+Filename clash after normalization (#330)
+=========================================
+
+We will test this one with full normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Suppose you created a file:
+
+  >>> fname = 'New Text Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-text-document.doc
+
+  >>> self.portal['test-folder']['new-text-document.doc'].Title()
+  'New Text Document.doc'
+
+Now you try to create/upload another with the same name. We will then
+generate a sequential filename to avoid the clash, but only if a
+'X-Force-New-Name' header is seen. Title should follow:
+
+  >>> fname = 'New Text Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-text-document-1.doc
+
+  >>> self.portal['test-folder']['new-text-document.doc'].Title()
+  'New Text Document.doc'
+
+  >>> self.portal['test-folder']['new-text-document-1.doc'].Title()
+  'New Text Document 1.doc'
+
+Make sure the title it's indexed:
+
+  >>> search('New Text Document 1.doc')
+  1
+
+  >>> fname = 'New Text Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-text-document-2.doc
+
+  >>> self.portal['test-folder']['new-text-document.doc'].Title()
+  'New Text Document.doc'
+
+  >>> self.portal['test-folder']['new-text-document-2.doc'].Title()
+  'New Text Document 2.doc'
+
+Make sure the title it's indexed:
+
+  >>> search('New Text Document 2.doc')
+  1
+
+If you try to copy the file to the same folder again using the same
+name it should also follow the same path:
+
+  >>> orig = 'new-text-document.doc'
+  >>> fname = 'New Text Document.doc'
+  >>> print http(r"""
+  ... COPY plone/test-folder/%s HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (orig, quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-text-document-3.doc
+
+  >>> self.portal['test-folder']['new-text-document.doc'].Title()
+  'New Text Document.doc'
+
+  >>> self.portal['test-folder']['new-text-document-3.doc'].Title()
+  'New Text Document 3.doc'
+
+Make sure the title it's indexed:
+
+  >>> search('New Text Document 3.doc')
+  1
+
+The Enfold Desktop client does prepend 'Copy of' to the filename If
+you try to copy the file to the same folder again using the same
+name. Make sure the original filename title remains unchanged
+(DESKTOP-739):
+
+  >>> orig = 'new-text-document.doc'
+  >>> fname = 'Copy of new-text-document.doc'
+  >>> print http(r"""
+  ... COPY plone/test-folder/%s HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (orig, quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: copy-of-new-text-document.doc
+
+  >>> self.portal['test-folder']['new-text-document.doc'].Title()
+  'New Text Document.doc'
+
+  >>> self.portal['test-folder']['copy-of-new-text-document.doc'].Title()
+  'Copy of new-text-document.doc'
+
+Make sure the title it's indexed:
+
+  >>> search('New Text Document 3.doc')
+  1
+
+Same as above, but only now for a folder:
+
+  >>> fname = 'New Folder'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-folder
+
+  >>> self.portal['test-folder']['new-folder'].Title()
+  'New Folder'
+
+  >>> fname = 'New Folder'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-folder-1
+
+  >>> self.portal['test-folder']['new-folder-1'].Title()
+  'New Folder 1'
+
+Make sure the title it's indexed:
+
+  >>> search('New Folder 1')
+  1
+
+  >>> fname = 'New Folder'
+  >>> print http(r"""
+  ... MKCOL plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-folder-2
+
+  >>> self.portal['test-folder']['new-folder-2'].Title()
+  'New Folder 2'
+
+Make sure the title it's indexed:
+
+  >>> search('New Folder 2')
+  1
+
+If you try to copy the folder to the same folder again using the same
+name it should also follow the same path:
+
+  >>> orig = 'new-folder'
+  >>> fname = 'New Folder'
+  >>> print http(r"""
+  ... COPY plone/test-folder/%s HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (orig, quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-folder-3
+
+  >>> self.portal['test-folder']['new-folder-3'].Title()
+  'New Folder 3'
+
+Make sure the title it's indexed:
+
+  >>> search('New Folder 3')
+  1
+
+We only do this for normalized filenames, because for non-normalized
+ones Enfold Desktop would already had done the 'check if exists,
+generate sequential filename' dance. It can't guess when the file is
+renamed on the server side though:
+
+  >>> desktop.manage_changeProperties(filename_normalization=False)
+  >>> desktop.getProperty('filename_normalization', True)
+  False
+
+  >>> fname = 'New RTF Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created...
+
+  >>> fname = 'New RTF Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 204 No Content...
+
+Filename clash after normalization, part 2 (#384)
+=================================================
+
+We will test this one with relaxed normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=True)
+  >>> desktop.getProperty('relaxed_normalization', False)
+  True
+
+Suppose you created a file with a non-ascii character:
+
+  >>> fname = 'â.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: a.txt
+
+  >>> self.portal['test-folder']['a.txt'].Title()
+  '\xc3\xa2.txt'
+
+Now you try to create/upload another with the same name. We will then
+generate a sequential filename to avoid the clash, but only if a
+'X-Force-New-Name' header is seen. Name should follow:
+
+  >>> fname = 'â.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: a 1.txt
+
+  >>> self.portal['test-folder']['a 1.txt'].Title()
+  '\xc3\xa2 1.txt'
+
+Make sure the title it's indexed:
+
+  >>> search('\xc3\xa2 1.txt')
+  1
+
+  >>> fname = 'â.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: a 2.txt
+
+  >>> self.portal['test-folder']['a 2.txt'].Title()
+  '\xc3\xa2 2.txt'
+
+Make sure the title it's indexed:
+
+  >>> search('\xc3\xa2 2.txt')
+  1
+
+If you try to copy the file to the same folder again using the same
+name it should also follow the same path:
+
+  >>> orig = 'a.txt'
+  >>> fname = 'â.txt'
+  >>> print http(r"""
+  ... COPY plone/test-folder/%s HTTP/1.1
+  ... Destination: plone/test-folder/%s
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (orig, quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: a 3.txt
+
+  >>> self.portal['test-folder']['a 3.txt'].Title()
+  '\xc3\xa2 3.txt'
+
+Make sure the title it's indexed:
+
+  >>> search('\xc3\xa2 3.txt')
+  1
+
+Filename clash after the 10th item (#488)
+=========================================
+
+We will test this one with relaxed normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=True)
+  >>> desktop.getProperty('relaxed_normalization', False)
+  True
+
+
+Suppose you created a file with an apparently sequential number, and
+the number is 10. Another file with the number 9 exist too. Since we
+do string sorting, and not numerical sorting, 9 comes after 10, and so
+we used to think that the next number would be 10:
+
+  >>> fname = 'Text Document.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: Text Document.txt
+
+  >>> self.portal['test-folder']['Text Document.txt'].Title()
+  'Text Document.txt'
+
+  >>> fname = 'Text Document 9.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: Text Document 9.txt
+
+  >>> self.portal['test-folder']['Text Document 9.txt'].Title()
+  'Text Document 9.txt'
+
+  >>> fname = 'Text Document 10.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: Text Document 10.txt
+
+  >>> self.portal['test-folder']['Text Document 10.txt'].Title()
+  'Text Document 10.txt'
+
+Now you try to create/upload another with the same name. We will then
+generate a sequential filename to avoid the clash, but only if a
+'X-Force-New-Name' header is seen. Name should follow:
+
+  >>> fname = 'Text Document.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... X-Force-New-Name: Yes
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: Text Document 11.txt
+
+  >>> self.portal['test-folder']['Text Document 11.txt'].Title()
+  'Text Document 11.txt'
+
+Repeat and rinse, with a file containing a dash separating the
+sequential number.
+
+Suppose you created a file with an apparently sequential number, and
+the number is 10:
+
+  >>> fname = 'a-10.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: a-10.txt
+
+  >>> self.portal['test-folder']['a-10.txt'].Title()
+  'a-10.txt'
+
+Now you try to create/upload another with the same name. We will then
+generate a sequential filename to avoid the clash, but only if a
+'X-Force-New-Name' header is seen. Name should follow:
+
+  >>> fname = 'a-10.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: a-10-1.txt
+
+  >>> self.portal['test-folder']['a-10-1.txt'].Title()
+  'a-10-1.txt'
+
+Now we test again with full normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Suppose you created a file with an apparently sequential number, and
+the number is 12:
+
+  >>> fname = 'a-12.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: a-12.txt
+
+  >>> self.portal['test-folder']['a-12.txt'].Title()
+  'a-12.txt'
+
+Now you try to create/upload another with the same name. We will then
+generate a sequential filename to avoid the clash, but only if a
+'X-Force-New-Name' header is seen. Name should follow:
+
+  >>> fname = 'a-12.txt'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: a-12-1.txt
+
+  >>> self.portal['test-folder']['a-12-1.txt'].Title()
+  'a-12-1.txt'
+
+Filename clash with mixed normalization settings (#448)
+=======================================================
+
+This one is a little bit trickier. Basically, the flow goes like:
+
+1. A file is created with normalization disabled
+2. Normalization is enabled
+3. Another file with the same name is created
+
+What happens then is:
+
+4. Enfold Desktop will up the uniqueness count on the filename for the
+   *non-normalized* filename
+
+5. Then the server will try to check for existence of that
+   filename and fail and up the count *another time* and ignore the check
+   for existence.
+
+This test tries to reproduce that:
+
+We start with no normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=False)
+  >>> desktop.getProperty('filename_normalization', True)
+  False
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Suppose you created a file:
+
+  >>> fname = 'New Foo Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  <BLANKLINE>
+
+  >>> self.portal['test-folder']['New Foo Document.doc'].Title()
+  'New Foo Document.doc'
+
+Then enable normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Now you try to create/upload another with the same name. We will then
+generate a sequential filename to avoid the clash, but only if a
+'X-Force-New-Name' header is seen. Title should follow. Note this
+works just fine:
+
+  >>> fname = 'New Foo Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-foo-document.doc
+
+  >>> self.portal['test-folder']['new-foo-document.doc'].Title()
+  'New Foo Document.doc'
+
+Make sure the title it's indexed (note there are *two* with the same
+title here, but this is a somewhat artificial case):
+
+  >>> search('New Foo Document.doc')
+  2
+
+Do it again, should up the count to '1':
+
+  >>> fname = 'New Foo Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-foo-document-1.doc
+
+  >>> self.portal['test-folder']['new-foo-document-1.doc'].Title()
+  'New Foo Document 1.doc'
+
+Make sure the title it's indexed:
+
+  >>> search('New Foo Document 1.doc')
+  1
+
+Do it again, should up the count to '2':
+
+  >>> fname = 'New Foo Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-foo-document-2.doc
+
+  >>> self.portal['test-folder']['new-foo-document-2.doc'].Title()
+  'New Foo Document 2.doc'
+
+Make sure the title it's indexed:
+
+  >>> search('New Foo Document 2.doc')
+  1
+
+Now try to up the count on the 'client side'. This is where the bug
+would manifest itself. The correct behaviour, as demonstrated below is
+to follow the normalized filename count instead and ignore the client
+count.
+
+  >>> fname = 'New Foo Document 1.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-foo-document-1-1.doc
+
+  >>> self.portal['test-folder']['new-foo-document-1-1.doc'].Title()
+  'New Foo Document 1 1.doc'
+
+Filename clash with mixed normalization settings (#448, part 2)
+=======================================================
+
+This one is even trickier. Basically, the flow goes like:
+
+1. A file is created with normalization disabled
+2. Normalization is enabled
+3. Another file with the same name is created, with the client forcing
+   a sequential number right away.
+
+We want the normalized filename to *not* contain the sequential number
+if a file with the same name did not exist yet.
+
+This test tries to reproduce that:
+
+We start with no normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=False)
+  >>> desktop.getProperty('filename_normalization', True)
+  False
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Suppose you created a file:
+
+  >>> fname = 'New Bar Document.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  <BLANKLINE>
+
+  >>> self.portal['test-folder']['New Bar Document.doc'].Title()
+  'New Bar Document.doc'
+
+Then enable normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Now you try to create/upload another with the same name but forcing a
+sequential number. The final normalized filename should still contain
+the sequence because a file with that name does not exist. Title
+should follow. Note this works just fine:
+
+  >>> fname = 'New Bar Document 1.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... X-Force-New-Name: Yes
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: new-bar-document-1.doc
+
+  >>> self.portal['test-folder']['new-bar-document-1.doc'].Title()
+  'New Bar Document 1.doc'
+
+Filename clash with normalization avoids acquisition
+====================================================
+
+We will test this one with full normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Suppose you created a file in the parent folder:
+
+  >>> fname = 'Acquisition Sucks.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: acquisition-sucks.doc
+
+  >>> self.portal['test-folder']['acquisition-sucks.doc'].Title()
+  'Acquisition Sucks.doc'
+
+Now create a file with the same name in the underlying folder. It
+should *not* clash with the file in the parent folder:
+
+  >>> _ = self.portal['test-folder'].invokeFactory('Folder', 'sub-folder')
+
+  >>> fname = 'Acquisition Sucks.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/sub-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: acquisition-sucks.doc
+
+  >>> self.portal['test-folder']['sub-folder']['acquisition-sucks.doc'].Title()
+  'Acquisition Sucks.doc'
+
+Now let's repeat the same tests with normalization disabled:
+
+  >>> desktop.manage_changeProperties(filename_normalization=False)
+  >>> desktop.getProperty('filename_normalization', True)
+  False
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Suppose you created a file in the parent folder:
+
+  >>> fname = 'Acquisition Sucks.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  <BLANKLINE>
+
+  >>> self.portal['test-folder']['Acquisition Sucks.doc'].Title()
+  'Acquisition Sucks.doc'
+
+Now create a file with the same name in the underlying folder. It
+should *not* clash with the file in the parent folder:
+
+  >>> fname = 'Acquisition Sucks.doc'
+  >>> print http(r"""
+  ... PUT plone/test-folder/sub-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  <BLANKLINE>
+
+  >>> self.portal['test-folder']['sub-folder']['Acquisition Sucks.doc'].Title()
+  'Acquisition Sucks.doc'
+
+Default Plone AccessRule Nonsense
+=================================
+
+The default Plone AccessRule has some funky behaviour. It sets the
+'SiteRootPATH' and forces the 'Plone' object into the
+'TraversalRequestNameStack'. We are going to reproduce that here since
+it caused some issues with normalization:
+
+  >>> pid = self.portal.getId()
+  >>> root = self.portal.unrestrictedTraverse('/')
+  >>> add = root.manage_addProduct['PythonScripts']
+  >>> _ = add.manage_addPythonScript(id='access_rule')
+  >>> root.access_rule.write("""\
+  ... siteObj = "%s"
+  ... context.REQUEST['TraversalRequestNameStack'].append(siteObj)
+  ... context.REQUEST.set('SiteRootPATH', '/') """ % pid)
+
+  >>> add = root.manage_addProduct['SiteAccess']
+  >>> _ = add.manage_addAccessRule(method_id='access_rule')
+
+We will test this one with full normalization:
+
+  >>> desktop.manage_changeProperties(filename_normalization=True)
+  >>> desktop.getProperty('filename_normalization', False)
+  True
+
+  >>> desktop.manage_changeProperties(relaxed_normalization=False)
+  >>> desktop.getProperty('relaxed_normalization', True)
+  False
+
+Now, create a file with some spaces in the name:
+
+  >>> fname = 'Access Rule Pain.doc'
+  >>> print http(r"""
+  ... PUT test-folder/%s HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(fname), user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: access-rule-pain.doc
+
+  >>> self.portal['test-folder']['access-rule-pain.doc'].Title()
+  'Access Rule Pain.doc'
+
+Then try to rename it by performing a MOVE. The new filename should be
+normalized too. But due to the Access Rule it wasn't (see bug
+#477). This test ensures that the bug has been fixed:
+
+  >>> orig_fname = 'access-rule-pain.doc'
+  >>> fname = 'We Eat Access Rules.doc'
+  >>> print http(r"""
+  ... MOVE test-folder/%s HTTP/1.1
+  ... Destination: test-folder/%s
+  ... Overwrite: T
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(orig_fname), fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: we-eat-access-rules.doc
+
+Try to rename the file to 'index_html' (cheap way of making it the
+default view for a folder). This was reported to fail on #DESKTOP-619:
+
+  >>> orig_fname = 'we-eat-access-rules.doc'
+  >>> fname = 'index_html'
+  >>> print http(r"""
+  ... MOVE test-folder/%s HTTP/1.1
+  ... Destination: test-folder/%s
+  ... Overwrite: T
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(orig_fname), fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: index_html
+
+Try to rename the file to 'index-html' too. A variation of the previous test:
+
+  >>> orig_fname = 'index_html'
+  >>> fname = 'index-html'
+  >>> print http(r"""
+  ... MOVE test-folder/%s HTTP/1.1
+  ... Destination: test-folder/%s
+  ... Overwrite: T
+  ... Authorization: Basic %s:%s
+  ... """ % (quote(orig_fname), fname, user_name, user_password),
+  ...        handle_errors=True)
+  HTTP/1.1 201 Created
+  ...
+  X-Renamed-To: index-html
+

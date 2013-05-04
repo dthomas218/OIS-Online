@@ -1,0 +1,61 @@
+Tests for Import/Export using Marshaller
+========================================
+
+  >>> def demarshall(marshaller, instance, fname):
+  ...    from os.path import dirname, join
+  ...    m = marshaller()
+  ...    file = open(join(dirname(__file__), 'data', fname), 'r')
+  ...    m.demarshall(instance, data=None, file=file)
+
+  >>> def marshall(marshaller, instance):
+  ...    m = marshaller()
+  ...    return m.marshall(instance)
+
+  >>> def c(v):
+  ...    if callable(v):
+  ...       return v()
+  ...    return v
+
+Create a ``link`` object:
+
+  >>> _ = self.portal.invokeFactory('Link', 'link1')
+  >>> print c(self.portal.link1.remote_url).strip('http://')
+
+Import ``.URL`` file using the URLMarshaller:
+
+  >>> from Products.Lime.marshaller import URLMarshaller
+  >>> demarshall(URLMarshaller, self.portal.link1, 'Google.URL')
+
+  >>> print c(self.portal.link1.remote_url)
+  http://www.google.com/ig
+
+Marshall it back to a string, should export as compatible with both
+Windows ``.URL`` and Linux ``.desktop``:
+
+  >>> print marshall(URLMarshaller, self.portal.link1)[2]
+  [InternetShortcut]
+  URL = http://www.google.com/ig
+  <BLANKLINE>
+
+Create another ``link`` object:
+
+  >>> _ = self.portal.invokeFactory('Link', 'link2')
+  >>> print c(self.portal.link2.remote_url).strip('http://')
+
+Import ``.desktop`` file using the DesktopMarshaller:
+
+  >>> from Products.Lime.marshaller import DesktopMarshaller
+  >>> demarshall(DesktopMarshaller, self.portal.link2, 'Google.desktop')
+
+  >>> print c(self.portal.link2.remote_url)
+  http://www.google.com/
+
+Marshall it back to a string, should export as compatible with both
+Windows ``.URL`` and Linux ``.desktop``:
+
+  >>> print marshall(DesktopMarshaller, self.portal.link2)[2]
+  [Desktop Entry]
+  URL = http://www.google.com/
+  GenericName = Google Website
+  Name = Google
+  <BLANKLINE>
