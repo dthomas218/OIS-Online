@@ -1,6 +1,0 @@
-[validators]
-validators=
-
-[actions]
-action.failure=traverse_to:string:pane_manage_locks
-action.success=traverse_to:string:pane_manage_locks
