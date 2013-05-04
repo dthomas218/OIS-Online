@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Encoding=UTF-8
+Name=Google
+Type=Link
+URL=http://www.google.com/
+TryExec=
+Icon=/usr/share/pixmaps/firefox.xpm
+X-GNOME-DocPath=
+Terminal=false
+GenericName[en]=Google Website
+Comment[en]=Launch Google Website

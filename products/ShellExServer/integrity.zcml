@@ -1,0 +1,12 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser">
+
+  <browser:page 
+    name="index.html"
+    layer="Products.PluggableAuthService.interfaces.request.IWebDAVRequest"
+    for=".integrity.ILinkIntegrityNotificationException2"
+    class=".integrity.RemoveConfirmationView2"
+    permission="zope2.Public" />
+
+</configure>

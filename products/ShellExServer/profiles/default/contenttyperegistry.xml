@@ -1,0 +1,165 @@
+<?xml version="1.0"?>
+<object name="content_type_registry" meta_type="Content Type Registry">
+ <predicate name="folder_request_header" content_type_name="Folder"
+    predicate_type="request_header">
+  <argument value="Folder"/>
+  <argument value="X-Enfold-Desktop-Portal-Type"/>
+ </predicate>
+ <predicate name="folder_extension_fld" content_type_name="Folder"
+    predicate_type="extension">
+  <argument value="fld"/>
+ </predicate>
+ <predicate name="link_request_header" content_type_name="Link"
+    predicate_type="request_header">
+  <argument value="Link"/>
+  <argument value="X-Enfold-Desktop-Portal-Type"/>
+ </predicate>
+ <predicate name="link_extension_url" content_type_name="Link"
+    predicate_type="extension">
+  <argument value="url"/>
+ </predicate>
+ <predicate name="event_extension_ics" content_type_name="Event"
+    predicate_type="extension">
+  <argument value="ics"/>
+ </predicate>
+ <predicate name="event_request_header" content_type_name="Event"
+    predicate_type="request_header">
+  <argument value="Event"/>
+  <argument value="X-Enfold-Desktop-Portal-Type"/>
+ </predicate>
+ <predicate name="event_extension_evt" content_type_name="Event"
+    predicate_type="extension">
+  <argument value="evt"/>
+ </predicate>
+ <predicate name="image_extension_jpg" content_type_name="Image"
+    predicate_type="extension">
+  <argument value="jpg"/>
+ </predicate>
+ <predicate name="image_extension_png" content_type_name="Image"
+    predicate_type="extension">
+  <argument value="png"/>
+ </predicate>
+ <predicate name="image_extension_bmp" content_type_name="Image"
+    predicate_type="extension">
+  <argument value="bmp"/>
+ </predicate>
+ <predicate name="image_extension_ico" content_type_name="Image"
+    predicate_type="extension">
+  <argument value="ico"/>
+ </predicate>
+ <predicate name="image_request_header" content_type_name="Image"
+    predicate_type="request_header">
+  <argument value="Image"/>
+  <argument value="X-Enfold-Desktop-Portal-Type"/>
+ </predicate>
+ <predicate name="image_extension_gif" content_type_name="Image"
+    predicate_type="extension">
+  <argument value="gif"/>
+ </predicate>
+ <predicate name="file_request_header" content_type_name="File"
+    predicate_type="request_header">
+  <argument value="File"/>
+  <argument value="X-Enfold-Desktop-Portal-Type"/>
+ </predicate>
+ <predicate name="file_extension_bin" content_type_name="File"
+    predicate_type="extension">
+  <argument value="bin"/>
+ </predicate>
+ <predicate name="document_extension_html" content_type_name="Document"
+    predicate_type="extension">
+  <argument value="html"/>
+ </predicate>
+ <predicate name="document_extension_htm" content_type_name="Document"
+    predicate_type="extension">
+  <argument value="htm"/>
+ </predicate>
+ <predicate name="document_extension_stx" content_type_name="Document"
+    predicate_type="extension">
+  <argument value="stx"/>
+ </predicate>
+ <predicate name="document_extension_rst" content_type_name="Document"
+    predicate_type="extension">
+  <argument value="rst"/>
+ </predicate>
+ <predicate name="document_request_header" content_type_name="Document"
+    predicate_type="request_header">
+  <argument value="Document"/>
+  <argument value="X-Enfold-Desktop-Portal-Type"/>
+ </predicate>
+ <predicate name="document_extension_txt" content_type_name="Document"
+    predicate_type="extension">
+  <argument value="txt"/>
+ </predicate>
+ <predicate name="calendar_mime" content_type_name="Folder"
+    predicate_type="major_minor">
+  <argument value="text"/>
+  <argument value="calendar"/>
+ </predicate>
+ <predicate name="calendar_ext" content_type_name="Folder"
+    predicate_type="extension">
+  <argument value="ics,vcs"/>
+ </predicate>
+ <predicate name="ATNewsItem_ext" content_type_name="News Item"
+    predicate_type="extension">
+  <argument value="news"/>
+ </predicate>
+ <predicate name="ATLink_ext" content_type_name="Link"
+    predicate_type="extension">
+  <argument value="link,url"/>
+ </predicate>
+ <predicate name="ATEvent_ext" content_type_name="Event"
+    predicate_type="extension">
+  <argument value="event"/>
+ </predicate>
+ <predicate name="ATFavorite_ext" content_type_name="Favorite"
+    predicate_type="extension">
+  <argument value="fav"/>
+ </predicate>
+ <predicate name="ATDocument_ext" content_type_name="Document"
+    predicate_type="extension">
+  <argument value="txt,stx,rst,rest,py"/>
+ </predicate>
+ <predicate name="ATImage_ext" content_type_name="Image"
+    predicate_type="extension">
+  <argument value="jpg,jpeg,png,gif"/>
+ </predicate>
+ <predicate name="image" content_type_name="Image"
+    predicate_type="major_minor">
+  <argument value="image"/>
+  <argument value=""/>
+ </predicate>
+ <predicate name="application_xhtml+xml" content_type_name="Document"
+    predicate_type="major_minor">
+  <argument value="application"/>
+  <argument value="xhtml+xml"/>
+ </predicate>
+ <predicate name="message_rfc822" content_type_name="Document"
+    predicate_type="major_minor">
+  <argument value="message"/>
+  <argument value="rfc822"/>
+ </predicate>
+ <predicate name="text" content_type_name="Document"
+    predicate_type="major_minor">
+  <argument value="text"/>
+  <argument value=""/>
+ </predicate>
+ <predicate name="application" content_type_name="File"
+    predicate_type="major_minor">
+  <argument value="application"/>
+  <argument value=""/>
+ </predicate>
+ <predicate name="audio" content_type_name="File"
+    predicate_type="major_minor">
+  <argument value="audio"/>
+  <argument value=""/>
+ </predicate>
+ <predicate name="video" content_type_name="File"
+    predicate_type="major_minor">
+  <argument value="video"/>
+  <argument value=""/>
+ </predicate>
+ <predicate name="catch_all" content_type_name="File"
+    predicate_type="name_regex">
+  <argument value=".*"/>
+ </predicate>
+</object>

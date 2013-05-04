@@ -1,0 +1,67 @@
+Tests for Import/Export using Marshaller
+========================================
+
+Favorite behaves slightly different. Instead of storing the full url,
+it stores a relative path from the root of the portal.
+
+  >>> self.portal.portal_url()
+  'http://.../plone'
+
+  >>> def demarshall(marshaller, instance, fname):
+  ...    from os.path import dirname, join
+  ...    m = marshaller()
+  ...    file = open(join(dirname(__file__), 'data', fname), 'r')
+  ...    m.demarshall(instance, data=None, file=file)
+
+  >>> def marshall(marshaller, instance):
+  ...    m = marshaller()
+  ...    return m.marshall(instance)
+
+  >>> def c(v):
+  ...    if callable(v):
+  ...       return v()
+  ...    return v
+
+Create a ``link`` object:
+
+  >>> _ = self.portal.invokeFactory('Favorite', 'link1')
+  >>> print c(self.portal.link1.remote_url).strip('http://')
+
+Import ``.URL`` file using the URLMarshaller:
+
+  >>> from Products.Lime.marshaller import URLMarshaller
+  >>> demarshall(URLMarshaller, self.portal.link1, 'Local.URL')
+
+  >>> print c(self.portal.link1.remote_url)
+  foo/bar/baz
+
+Marshall it back to a string, should export as compatible with both
+Windows ``.URL`` and Linux ``.desktop``:
+
+  >>> print marshall(URLMarshaller, self.portal.link1)[2]
+  [InternetShortcut]
+  URL = http://.../plone/foo/bar/baz
+  <BLANKLINE>
+
+Create another ``link`` object:
+
+  >>> _ = self.portal.invokeFactory('Favorite', 'link2')
+  >>> print c(self.portal.link2.remote_url).strip('http://')
+
+Import ``.desktop`` file using the DesktopMarshaller:
+
+  >>> from Products.Lime.marshaller import DesktopMarshaller
+  >>> demarshall(DesktopMarshaller, self.portal.link2, 'Local.desktop')
+
+  >>> print c(self.portal.link2.remote_url)
+  foo/bar/baz
+
+Marshall it back to a string, should export as compatible with both
+Windows ``.URL`` and Linux ``.desktop``:
+
+  >>> print marshall(DesktopMarshaller, self.portal.link2)[2]
+  [Desktop Entry]
+  URL = http://.../plone/foo/bar/baz
+  GenericName = Baz Description
+  Name = Baz at localhost
+  <BLANKLINE>

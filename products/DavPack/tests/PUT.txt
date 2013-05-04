@@ -1,0 +1,164 @@
+Give the Manager role to the current user:
+
+  >>> from Testing.ZopeTestCase import user_name, user_password, folder_name
+  >>> self.setRoles(['Manager'])
+
+Do a PUT to a non-existing file using a ``.zip`` file
+extension. Should create a ``OFS.File`` just fine, by detecting the
+content-type from the extension (well, actually because ``File`` is
+the fallback for anything that is not an Image, text/* or .pt).
+
+  >>> print http(r"""
+  ... PUT /%s/file.zip HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (folder_name, user_name, user_password), handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('file.zip').meta_type
+  File
+
+Do a PUT to a non-existing file using a ``.pt`` file
+extension. Should create a ``Page Template`` just fine, by detecting the
+content-type from the extension.
+
+  >>> print http(r"""
+  ... PUT /%s/file.pt HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (folder_name, user_name, user_password), handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('file.pt').meta_type
+  Page Template
+
+Do a PUT to a non-existing file using a ``.txt`` file
+extension. Should create a ``DTML Document`` just fine, by detecting the
+content-type from the extension.
+
+  >>> print http(r"""
+  ... PUT /%s/file.txt HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (folder_name, user_name, user_password), handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('file.txt').meta_type
+  DTML Document
+
+Do a PUT to a non-existing file using a ``.jpg`` file
+extension. Should create a ``Image`` just fine, by detecting the
+content-type from the extension.
+
+  >>> print http(r"""
+  ... PUT /%s/image.jpg HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... """ % (folder_name, user_name, user_password), handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('image.jpg').meta_type
+  Image
+
+Do a PUT to a non-existing file using a ``text/plain``
+Content-Type. Should create a ``DTML Document`` just fine, by
+detecting the content-type from request header.
+
+  >>> print http(r"""
+  ... PUT /%s/file.bla HTTP/1.1
+  ... Content-Type: text/plain
+  ... Authorization: Basic %s:%s
+  ... """ % (folder_name, user_name, user_password), handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('file.pt').meta_type
+  Page Template
+
+Do a PUT to a non-existing file using a ``image/jpeg``
+Content-Type. Should create a ``Image`` just fine, by
+detecting the content-type from request header.
+
+  >>> print http(r"""
+  ... PUT /%s/image HTTP/1.1
+  ... Content-Type: image/jpeg
+  ... Authorization: Basic %s:%s
+  ... """ % (folder_name, user_name, user_password), handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('image').meta_type
+  Image
+
+Do a PUT to a non-existing file, with no extension and some plain-text
+content and setting no content type header. Should create a ``DTML
+Document`` just fine, by detecting the content-type from the file content.
+
+  >>> print http(r"""
+  ... PUT /%s/document HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... <BLANKLINE>
+  ... I am the walrus.
+  ... """ % (folder_name, user_name, user_password), handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('document').meta_type
+  DTML Document
+
+Do a PUT to a non-existing file, with no extension and some binary
+content and setting no content type header. Should create a ``File``,
+by detecting the content-type from file content.
+
+  >>> print http("""
+  ... PUT /%s/binary HTTP/1.1
+  ... Authorization: Basic %s:%s
+  ... <BLANKLINE>
+  ... I am the walrus\x00.
+  ... """ % (folder_name, user_name, user_password), handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('binary').meta_type
+  File
+
+Do a PUT to a non-existing file, with no extension and some binary
+content and setting no content type header. We will upload a file
+larger than ``1 << 19`` so that it triggers the monkeypatch and reads
+only part of the file. Should create a ``File``, by detecting the
+content-type from file content.
+
+Note that if Content-Length is not set it will not trigger the patch
+but instead load the whole thing in memory.
+
+  >>> body = 'I am the walrus\x00. %s' % 'X' * (1 << 19)
+  >>> length = len(body)
+  >>> print http(r"""
+  ... PUT /%s/big_binary HTTP/1.1
+  ... Content-Length: %d
+  ... Authorization: Basic %s:%s
+  ... <BLANKLINE>
+  ... %s
+  ... """ % (folder_name, length,
+  ...        user_name, user_password, body),
+  ...        handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('big_binary').meta_type
+  File
+
+Make sure index_html doesn't exist yet.
+
+  >>> 'index_html' in self.folder.objectIds()
+  False
+
+PUT index_html into a Zope Folder. Should work just fine.
+
+  >>> body = 'I am the walrus'
+  >>> length = len(body)
+  >>> print http(r"""
+  ... PUT /%s/index_html HTTP/1.1
+  ... Content-Length: %d
+  ... Authorization: Basic %s:%s
+  ... <BLANKLINE>
+  ... %s
+  ... """ % (folder_name, length,
+  ...        user_name, user_password, body),
+  ...        handle_errors=False)
+  HTTP/1.1 201 Created...
+
+  >>> print self.folder._getOb('index_html').meta_type
+  DTML Document
+
