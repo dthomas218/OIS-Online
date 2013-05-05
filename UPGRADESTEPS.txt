@@ -1,0 +1,19 @@
+1. Create a new Folder called for example "newmembers".
+
+2. Cut and Paste everyhting from Members into the new folder. (This takes 10-15 minutes)
+
+3. Delete the Members folder.
+
+4. Rename the new folder to "Members".
+
+5. In /support/forms/archive delete the create-new-ticketTEMP and create-new-ticketTEMP2 forms.
+
+
+A. Pack the database
+
+B. Copy Data.fs to the new server.
+
+C. Start up new server.
+
+D. Go to the ZMI and run the migration.
+
