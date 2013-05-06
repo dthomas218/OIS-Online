@@ -6,15 +6,24 @@ Clone the github repo::
    $ git clone https://github.com/dthomas218/OIS-Online /the/server/directory
    $ cd /the/server/directory
    
+Switch to the right version tag:
+
+   $ git checkout 2.0.2
+
+(For example).
+
 Create a buildout.cfg that look like this:
 
    [buildout]
    extends=production.cfg
+
+   eggs-directory=../buildout-cache/eggs
+   download-cache=../buildout-cache/downloads
    
-Or "development.cfg" if this is for development, or "staging.cfg" if it is a
-staging server. The main differences between production adn staging is the 
-ports. If you need other ports that the ones stated you can override them in
-the local buildout.cfg (which should never be checked into git).
+Or extend "development.cfg" if this is for development, or "staging.cfg" if 
+it is a staging server. The main differences between production adn staging 
+is the ports. If you need other ports that the ones stated you can override 
+them in the local buildout.cfg (which should never be checked into git).
 
 Run the buildout::
 
@@ -94,4 +103,30 @@ possibly updating Zope, Plone, eggs, and product packages in the process.
 Check portal_migration in the ZMI after update to perform version migration
 if necessary. You may also need to visit the product installer to update
 product versions.
+
+Developing
+==========
+
+The custom products: Products.JobTicket and Products.OISTask should always
+be tagged and released before moving to production. Use zest.releaser and
+it's "fullrelease" command for this. See::
+
+    https://pypi.python.org/pypi/zest.releaser
+
+The update version.cfg with the new versions, but in the version tag,
+and also the find-links for the products.
+
+Then tag OIS-Online with a new version::
+
+    $ git tag 2.1.3 (for example)
+    $ git push --tags
+
+Update the server:
+
+    $ git pull
+    $ git checkout 2.1.3
+    $ bin/buildout
+    $ bin/supervisorctl shutdown
+    $ bin/supervisord
+
 
