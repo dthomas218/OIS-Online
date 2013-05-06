@@ -27,17 +27,6 @@ And, your new Plone at::
 
     http://localhost:8081/Plone
 
-Use the admin password provided at::
-
-    /home/projects/OIS/oisonline/dev/adminPassword.txt
-
-To change the admin password, click the "Password" link for the admin
-user at::
-
-    http://localhost:8081/acl_users/users/manage_users
-
-Password changes will not be reflected in adminPassword.txt.
-
 
 Updating After Installation
 ===========================
