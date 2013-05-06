@@ -1,7 +1,0 @@
-<?xml version="1.0"?>
-<tool-setup>
- <required tool_id="property_set_registry"
-           class="Products.PropertySets.PropertySetRegistry.PropertySetRegistry"/>
- <required tool_id="vocabulary"
-           class="Products.CMFPropertySets.Vocabulary.GlobalVocabRegistry"/>
-</tool-setup>
